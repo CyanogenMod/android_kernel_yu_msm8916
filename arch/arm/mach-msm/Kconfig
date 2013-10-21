@@ -671,6 +671,12 @@ config MSM_RPC_LOOPBACK_XPRT
 	  Support for routing RPC messages between APPS clients
 	  and APPS servers.  Helps in testing APPS RPC framework.
 
+config INTELLI_PLUG
+	bool "Enable intelli-plug cpu hotplug driver"
+	default n
+	help
+	  Generic Intelli-plug cpu hotplug driver for ARM SOCs
+
 config RTAC
 	bool "MSM8K real-time audio calibration support"
 	default y
