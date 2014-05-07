@@ -389,5 +389,16 @@
 			        bias-pull-up; /* PULL UP */
 			};
 		};
+
+		ext_buck_vsel {
+			qcom,pins = <&gp 111>;
+			qcom,num-grp-pins = <1>;
+			qcom,pin-func = <0>;
+			label = "ext-buck-vsel";
+
+			ext_buck_vsel_default: vsel0 {
+				drive-strength = <2>;
+			};
+		};
 	};
 };
