@@ -73,6 +73,11 @@
 /*
  * Defines
  */
+#define	APDS9930_ID	0x30
+#define	APDS9931_ID	0x39
+#define	APDS9900_ID	0x29
+#define	APDS9901_ID	0x20
+
 #define APDS993X_ENABLE_REG	0x00
 #define APDS993X_ATIME_REG	0x01
 #define APDS993X_PTIME_REG	0x02
@@ -263,7 +268,7 @@ static struct sensors_classdev sensors_light_cdev = {
 	.max_range = "30000",
 	.resolution = "0.0125",
 	.sensor_power = "0.20",
-	.min_delay = 1000, /* in microseconds */
+	.min_delay = 0, /* in microseconds */
 	.fifo_reserved_event_count = 0,
 	.fifo_max_event_count = 0,
 	.enabled = 0,
@@ -281,7 +286,7 @@ static struct sensors_classdev sensors_proximity_cdev = {
 	.max_range = "5",
 	.resolution = "5.0",
 	.sensor_power = "3",
-	.min_delay = 1000, /* in microseconds */
+	.min_delay = 0, /* in microseconds */
 	.fifo_reserved_event_count = 0,
 	.fifo_max_event_count = 0,
 	.enabled = 0,
@@ -1183,12 +1188,10 @@ static int apds993x_set_als_poll_delay(struct i2c_client *client,
 
 	pr_debug("%s: val=%d\n", __func__, val);
 
-	/* minimum 5ms */
-	if (val < 3000)
-		val = 3000;
-
-	/* convert us => ms */
-	data->als_poll_delay = val / 1000;
+	/* minimum 3ms */
+	if (val < 3)
+		val = 3;
+	data->als_poll_delay = val;
 
 	if (data->als_poll_delay >= 100)
 		atime_index = APDS993X_ALS_RES_37888;
@@ -1749,7 +1752,7 @@ static ssize_t apds993x_show_als_poll_delay(struct device *dev,
 	struct apds993x_data *data = i2c_get_clientdata(client);
 
 	/* return in micro-second */
-	return sprintf(buf, "%d\n", data->als_poll_delay * 1000);
+	return snprintf(buf, PAGE_SIZE, "%d\n", data->als_poll_delay);
 }
 
 static ssize_t apds993x_store_als_poll_delay(struct device *dev,
@@ -1764,6 +1767,23 @@ static ssize_t apds993x_store_als_poll_delay(struct device *dev,
 
 	return count;
 }
+
+#ifdef ALS_POLLING_ENABLED
+static int apds993x_als_poll_delay(struct sensors_classdev *sensors_cdev,
+		unsigned int delay_msec)
+{
+	struct apds993x_data *data = container_of(sensors_cdev,
+			struct apds993x_data, als_cdev);
+	apds993x_set_als_poll_delay(data->client, delay_msec);
+	return 0;
+}
+#else
+static int apds993x_als_poll_delay(struct sensors_classdev *sensors_cdev,
+		unsigned int delay_msec)
+{
+	return 0;
+}
+#endif
 
 static DEVICE_ATTR(als_poll_delay, S_IWUSR | S_IRUGO,
 		apds993x_show_als_poll_delay, apds993x_store_als_poll_delay);
@@ -1832,12 +1852,24 @@ static int apds993x_init_client(struct i2c_client *client)
 		return err;
 
 	id = i2c_smbus_read_byte_data(client, CMD_BYTE|APDS993X_ID_REG);
-	if (id == 0x30) {
-		pr_info("%s: APDS9931\n", __func__);
-	} else if (id == 0x39) {
-		pr_info("%s: APDS9930\n", __func__);
-	} else {
-		pr_info("%s: Neither APDS9931 nor APDS9930\n", __func__);
+	switch (id) {
+	case APDS9931_ID:
+		dev_dbg(&client->dev, "APDS9931\n");
+		break;
+
+	case APDS9930_ID:
+		dev_dbg(&client->dev, "APDS9930\n");
+		break;
+
+	case APDS9900_ID:
+		dev_dbg(&client->dev, "APDS9900\n");
+		break;
+
+	case APDS9901_ID:
+		dev_dbg(&client->dev, "APDS9931\n");
+		break;
+	default:
+		dev_err(&client->dev, "Neither APDS993x nor APDS990x\n");
 		return -ENODEV;
 	}
 
@@ -2143,59 +2175,59 @@ static int sensor_parse_dt(struct device *dev,
 	pdata->irq_gpio = rc;
 
 	/* ps tuning data*/
-	rc = of_property_read_u32(np, "avago,ps_threshold", &tmp);
+	rc = of_property_read_u32(np, "avago,ps-threshold", &tmp);
 	if (rc) {
-		dev_err(dev, "Unable to read ps_threshold\n");
+		dev_err(dev, "Unable to read ps threshold\n");
 		return rc;
 	}
 	pdata->prox_threshold = tmp;
 
-	rc = of_property_read_u32(np, "avago,ps_hysteresis_threshold", &tmp);
+	rc = of_property_read_u32(np, "avago,ps-hysteresis-threshold", &tmp);
 	 if (rc) {
-		dev_err(dev, "Unable to read ps_hysteresis_threshold\n");
+		dev_err(dev, "Unable to read ps hysteresis threshold\n");
 		return rc;
 	}
 	pdata->prox_hsyteresis_threshold = tmp;
 
-	rc = of_property_read_u32(np, "avago,ps_pulse", &tmp);
+	rc = of_property_read_u32(np, "avago,ps-pulse", &tmp);
 	if (rc) {
-		dev_err(dev, "Unable to read ps_pulse\n");
+		dev_err(dev, "Unable to read ps pulse\n");
 		return rc;
 	}
 	pdata->prox_pulse = tmp;
 
-	rc = of_property_read_u32(np, "avago,ps_pgain", &tmp);
+	rc = of_property_read_u32(np, "avago,ps-pgain", &tmp);
 	if (rc) {
-		dev_err(dev, "Unable to read ps_pgain\n");
+		dev_err(dev, "Unable to read ps pgain\n");
 		return rc;
 	}
 	pdata->prox_gain = tmp;
 
 	/* ALS tuning value */
-	rc = of_property_read_u32(np, "avago,als_B", &tmp);
+	rc = of_property_read_u32(np, "avago,als-B", &tmp);
 	if (rc) {
-		dev_err(dev, "Unable to read apds993x_coe_b\n");
+		dev_err(dev, "Unable to read apds993x coefficient b\n");
 		return rc;
 	}
 	pdata->als_B = tmp;
 
-	rc = of_property_read_u32(np, "avago,als_C", &tmp);
+	rc = of_property_read_u32(np, "avago,als-C", &tmp);
 	if (rc) {
-		dev_err(dev, "Unable to read apds993x_coe_c\n");
+		dev_err(dev, "Unable to read apds993x coefficient c\n");
 		return rc;
 	}
 	pdata->als_C = tmp;
 
-	rc = of_property_read_u32(np, "avago,als_D", &tmp);
+	rc = of_property_read_u32(np, "avago,als-D", &tmp);
 	if (rc) {
-		dev_err(dev, "Unable to read apds993x_coe_d\n");
+		dev_err(dev, "Unable to read apds993x coefficient d\n");
 		return rc;
 	}
 	pdata->als_D = tmp;
 
-	rc = of_property_read_u32(np, "avago,ga_value", &tmp);
+	rc = of_property_read_u32(np, "avago,ga-value", &tmp);
 	if (rc) {
-		dev_err(dev, "Unable to read ga_value\n");
+		dev_err(dev, "Unable to read gain value\n");
 		return rc;
 	}
 	pdata->ga_value = tmp;
@@ -2385,11 +2417,10 @@ static int apds993x_probe(struct i2c_client *client,
 	/* Register to sensors class */
 	data->als_cdev = sensors_light_cdev;
 	data->als_cdev.sensors_enable = apds993x_als_set_enable;
-	data->als_cdev.sensors_poll_delay = NULL;
-
+	data->als_cdev.sensors_poll_delay = apds993x_als_poll_delay;
 	data->ps_cdev = sensors_proximity_cdev;
 	data->ps_cdev.sensors_enable = apds993x_ps_set_enable;
-	data->ps_cdev.sensors_poll_delay = NULL,
+	data->ps_cdev.sensors_poll_delay = NULL;
 
 	err = sensors_classdev_register(&client->dev, &data->als_cdev);
 	if (err) {
@@ -2475,7 +2506,7 @@ MODULE_DEVICE_TABLE(i2c, apds993x_id);
 
 static struct of_device_id apds993X_match_table[] = {
 	{ .compatible = "avago,apds9930",},
-	{ },
+	{ .compatible = "avago,apds9900",},
 };
 
 static const struct dev_pm_ops apds993x_pm_ops = {
