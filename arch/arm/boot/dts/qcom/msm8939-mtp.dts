@@ -12,11 +12,10 @@
 
 /dts-v1/;
 
-#include "msm8916-mtp.dtsi"
+#include "msm8939-mtp.dtsi"
 
 / {
-	model = "Qualcomm Technologies, Inc. MSM 8916 MTP";
-	compatible = "qcom,msm8916-mtp", "qcom,msm8916", "qcom,mtp";
+	model = "Qualcomm Technologies, Inc. MSM 8939 MTP";
+	compatible = "qcom,msm8939-mtp", "qcom,msm8939", "qcom,mtp";
 	qcom,board-id = <8 0>;
 };
-
