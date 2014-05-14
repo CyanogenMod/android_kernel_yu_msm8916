@@ -249,7 +249,7 @@ int afe_get_port_type(u16 port_id)
 	case AUDIO_PORT_ID_I2S_RX:
 	case AFE_PORT_ID_PRIMARY_MI2S_RX:
 	case AFE_PORT_ID_SECONDARY_MI2S_RX:
-	case AFE_PORT_ID_SECONDARY_MI2S_RX_VIBRA:
+	case AFE_PORT_ID_SECONDARY_MI2S_RX_SD1:
 	case AFE_PORT_ID_TERTIARY_MI2S_RX:
 	case AFE_PORT_ID_QUATERNARY_MI2S_RX:
 	case AFE_PORT_ID_SECONDARY_PCM_RX:
@@ -1136,6 +1136,11 @@ int afe_port_set_mad_type(u16 port_id, enum afe_mad_type mad_type)
 {
 	int i;
 
+	if (port_id == AFE_PORT_ID_TERTIARY_MI2S_TX) {
+		mad_type = MAD_SW_AUDIO;
+		return 0;
+	}
+
 	i = port_id - SLIMBUS_0_RX;
 	if (i < 0 || i >= ARRAY_SIZE(afe_ports_mad_type)) {
 		pr_err("%s: Invalid port_id 0x%x\n", __func__, port_id);
@@ -1148,6 +1153,9 @@ int afe_port_set_mad_type(u16 port_id, enum afe_mad_type mad_type)
 enum afe_mad_type afe_port_get_mad_type(u16 port_id)
 {
 	int i;
+
+	if (port_id == AFE_PORT_ID_TERTIARY_MI2S_TX)
+		return MAD_SW_AUDIO;
 
 	i = port_id - SLIMBUS_0_RX;
 	if (i < 0 || i >= ARRAY_SIZE(afe_ports_mad_type)) {
@@ -1603,7 +1611,7 @@ int afe_port_start(u16 port_id, union afe_port_config *afe_config,
 	case AFE_PORT_ID_PRIMARY_MI2S_RX:
 	case AFE_PORT_ID_PRIMARY_MI2S_TX:
 	case AFE_PORT_ID_SECONDARY_MI2S_RX:
-	case AFE_PORT_ID_SECONDARY_MI2S_RX_VIBRA:
+	case AFE_PORT_ID_SECONDARY_MI2S_RX_SD1:
 	case AFE_PORT_ID_SECONDARY_MI2S_TX:
 	case AFE_PORT_ID_TERTIARY_MI2S_RX:
 	case AFE_PORT_ID_TERTIARY_MI2S_TX:
@@ -1748,8 +1756,8 @@ int afe_get_port_index(u16 port_id)
 		 return IDX_AFE_PORT_ID_TERTIARY_MI2S_RX;
 	case AFE_PORT_ID_TERTIARY_MI2S_TX:
 		 return IDX_AFE_PORT_ID_TERTIARY_MI2S_TX;
-	case AFE_PORT_ID_SECONDARY_MI2S_RX_VIBRA:
-		return IDX_AFE_PORT_ID_SECONDARY_MI2S_RX_VIBRA;
+	case AFE_PORT_ID_SECONDARY_MI2S_RX_SD1:
+		return IDX_AFE_PORT_ID_SECONDARY_MI2S_RX_SD1;
 
 	default: return -EINVAL;
 	}
