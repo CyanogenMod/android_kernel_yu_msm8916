@@ -237,6 +237,8 @@ static char *pm_batt_supplied_to[] = {
  * @hw_access_lock:		lock to serialize access to charger registers
  * @ibat_change_lock:		lock to serialize ibat change requests from
  *				USB and thermal.
+ * @chg_enable_lock:		lock to serialize charging enable/disable for
+ *				SOC based resume charging
  * @usb_psy:			power supply to export information to
  *				userspace
  * @bms_psy:			power supply to export information to
@@ -290,6 +292,7 @@ struct qpnp_lbc_chip {
 	int				usb_psy_ma;
 	struct qpnp_lbc_irq		irqs[MAX_IRQS];
 	struct mutex			jeita_configure_lock;
+	struct mutex			chg_enable_lock;
 	spinlock_t			ibat_change_lock;
 	spinlock_t			hw_access_lock;
 	struct power_supply		*usb_psy;
@@ -875,6 +878,7 @@ static int get_prop_capacity(struct qpnp_lbc_chip *chip)
 		return DEFAULT_CAPACITY;
 
 	if (chip->bms_psy) {
+		mutex_lock(&chip->chg_enable_lock);
 		chip->bms_psy->get_property(chip->bms_psy,
 				POWER_SUPPLY_PROP_CAPACITY, &ret);
 		battery_status = get_prop_batt_status(chip);
@@ -896,6 +900,7 @@ static int get_prop_capacity(struct qpnp_lbc_chip *chip)
 			qpnp_lbc_vbatdet_override(chip, OVERRIDE_0);
 			qpnp_lbc_charger_enable(chip, SOC, 1);
 		}
+		mutex_unlock(&chip->chg_enable_lock);
 
 		soc = ret.intval;
 		if (soc == 0) {
@@ -1165,6 +1170,7 @@ static int qpnp_batt_power_set_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_STATUS:
 		if (val->intval == POWER_SUPPLY_STATUS_FULL &&
 				!chip->cfg_float_charge) {
+			mutex_lock(&chip->chg_enable_lock);
 			/* No override for VBAT_DET_LO comp */
 			rc = qpnp_lbc_vbatdet_override(chip, OVERRIDE_NONE);
 			if (rc)
@@ -1177,6 +1183,7 @@ static int qpnp_batt_power_set_property(struct power_supply *psy,
 						rc);
 			else
 				chip->chg_done = true;
+			mutex_unlock(&chip->chg_enable_lock);
 		}
 		break;
 	case POWER_SUPPLY_PROP_COOL_TEMP:
@@ -2025,6 +2032,7 @@ static int qpnp_lbc_probe(struct spmi_device *spmi)
 	dev_set_drvdata(&spmi->dev, chip);
 	device_init_wakeup(&spmi->dev, 1);
 	mutex_init(&chip->jeita_configure_lock);
+	mutex_init(&chip->chg_enable_lock);
 	spin_lock_init(&chip->hw_access_lock);
 	spin_lock_init(&chip->ibat_change_lock);
 
@@ -2221,6 +2229,7 @@ static int qpnp_lbc_remove(struct spmi_device *spmi)
 	if (chip->bat_if_base)
 		power_supply_unregister(&chip->batt_psy);
 	mutex_destroy(&chip->jeita_configure_lock);
+	mutex_destroy(&chip->chg_enable_lock);
 	dev_set_drvdata(&spmi->dev, NULL);
 	return 0;
 }
