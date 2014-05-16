@@ -56,6 +56,9 @@
 #include "mdss_panel.h"
 #include "mdss_debug.h"
 
+#define CREATE_TRACE_POINTS
+#include "mdss_mdp_trace.h"
+
 #define AXI_HALT_TIMEOUT_US	0x4000
 
 struct mdss_data_type *mdss_res;
@@ -70,6 +73,7 @@ struct msm_mdp_interface mdp5 = {
 	.fb_mem_get_iommu_domain = mdss_fb_mem_get_iommu_domain,
 	.panel_register_done = mdss_panel_register_done,
 	.fb_stride = mdss_mdp_fb_stride,
+	.check_dsi_status = mdss_check_dsi_ctrl_status,
 };
 
 #define DEFAULT_TOTAL_RGB_PIPES 3
