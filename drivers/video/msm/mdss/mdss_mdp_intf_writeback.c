@@ -49,7 +49,7 @@ struct mdss_mdp_writeback_ctx {
 	struct mdss_mdp_format_params *dst_fmt;
 	u16 width;
 	u16 height;
-	struct mdss_mdp_img_rect dst_rect;
+	struct mdss_rect dst_rect;
 
 	u8 rot90;
 	u32 bwc_mode;
@@ -136,13 +136,17 @@ static int mdss_mdp_writeback_format_setup(struct mdss_mdp_writeback_ctx *ctx,
 	struct mdss_mdp_format_params *fmt;
 	u32 dst_format, pattern, ystride0, ystride1, outsize, chroma_samp;
 	u32 opmode = ctx->opmode;
+	bool rotation = false;
 	struct mdss_data_type *mdata;
 
 	pr_debug("wb_num=%d format=%d\n", ctx->wb_num, format);
 
+	if (ctx->rot90)
+		rotation = true;
+
 	mdss_mdp_get_plane_sizes(format, ctx->width, ctx->height,
 				 &ctx->dst_planes,
-				 ctx->opmode & MDSS_MDP_OP_BWC_EN);
+				 ctx->opmode & MDSS_MDP_OP_BWC_EN, rotation);
 
 	fmt = mdss_mdp_get_format_params(format);
 	if (!fmt) {
