@@ -187,6 +187,18 @@ static const struct adreno_gpulist {
 		.pfp_jt_addr = 0x200,
 	},
 	{
+		.gpurev = ADRENO_REV_A405,
+		.core = 4,
+		.major = 0,
+		.minor = 5,
+		.patchid = ANY_ID,
+		.features = 0,
+		.pm4fw = "a420_pm4.fw",
+		.pfpfw = "a420_pfp.fw",
+		.gpudev = &adreno_a4xx_gpudev,
+		.gmem_size = SZ_256K,
+	},
+	{
 		.gpurev = ADRENO_REV_A420,
 		.core = 4,
 		.major = 2,
