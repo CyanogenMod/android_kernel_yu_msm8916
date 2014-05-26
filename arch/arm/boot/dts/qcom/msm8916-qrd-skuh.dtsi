@@ -103,10 +103,10 @@
 		avago,ps-hysteresis-threshold = <500>;
 		avago,ps-pulse = <8>;
 		avago,ps-pgain = <0>;
-		avago,als-B = <223>;
-		avago,als-C = <70>;
-		avago,als-D = <142>;
-		avago,ga-value = <48>;
+		avago,als-B = <186>;
+		avago,als-C = <75>;
+		avago,als-D = <129>;
+		avago,ga-value = <98>;
 	};
 
 	st@18 {
@@ -286,6 +286,12 @@
 					"cdc_pdm_lines_sus";
 			pinctrl-0 = <&cdc_pdm_lines_act>;
 			pinctrl-1 = <&cdc_pdm_lines_sus>;
+	};
+};
+
+&pm8916_vadc {
+	chan@30 {
+		qcom,scale-function = <10>;
 	};
 };
 
