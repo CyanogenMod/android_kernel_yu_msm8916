@@ -43,7 +43,7 @@
 
 #define WCD9XXX_MBHC_DEF_BUTTONS 8
 #define WCD9XXX_MBHC_DEF_RLOADS 5
-#define TAIKO_EXT_CLK_RATE 9600000
+#define DEFAULT_MCLK_RATE 9600000
 
 static int msm_btsco_rate = BTSCO_RATE_8KHZ;
 static int msm_btsco_ch = 1;
@@ -72,7 +72,7 @@ static struct wcd9xxx_mbhc_config wcd9xxx_mbhc_cfg = {
 	.calibration = NULL,
 	.micbias = MBHC_MICBIAS2,
 	.anc_micbias = MBHC_MICBIAS2,
-	.mclk_rate = TAIKO_EXT_CLK_RATE,
+	.mclk_rate = DEFAULT_MCLK_RATE,
 	.gpio = 0,
 	.gpio_irq = 0,
 	.gpio_level_insert = 0,
@@ -244,6 +244,7 @@ static const struct snd_soc_dapm_widget msm8x16_dapm_widgets[] = {
 
 static char const *rx_bit_format_text[] = {"S16_LE", "S24_LE"};
 static const char *const ter_mi2s_tx_ch_text[] = {"One", "Two"};
+static const char *const loopback_mclk_text[] = {"DISABLE", "ENABLE"};
 
 static int msm_pri_rx_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 				struct snd_pcm_hw_params *params)
@@ -313,6 +314,54 @@ static int mi2s_rx_bit_format_put(struct snd_kcontrol *kcontrol,
 	}
 	return 0;
 }
+
+static int loopback_mclk_get(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	return 0;
+}
+
+static int loopback_mclk_put(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	int ret = -EINVAL;
+	struct msm8916_asoc_mach_data *pdata = NULL;
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+
+	pdata = snd_soc_card_get_drvdata(codec->card);
+
+	switch (ucontrol->value.integer.value[0]) {
+	case 1:
+		pdata->digital_cdc_clk.clk_val = 9600000;
+		ret = afe_set_digital_codec_core_clock(
+				AFE_PORT_ID_PRIMARY_MI2S_RX,
+				&pdata->digital_cdc_clk);
+		if (ret < 0) {
+			pr_err("%s: failed to enable the MCLK: %d\n",
+					__func__, ret);
+			break;
+		}
+		msm8x16_wcd_mclk_enable(codec, 1, true);
+		break;
+	case 0:
+		pdata->digital_cdc_clk.clk_val = 0;
+		ret = afe_set_digital_codec_core_clock(
+				AFE_PORT_ID_PRIMARY_MI2S_RX,
+				&pdata->digital_cdc_clk);
+		if (ret < 0) {
+			pr_err("%s: failed to disable the MCLK: %d\n",
+					__func__, ret);
+			break;
+		}
+		msm8x16_wcd_mclk_enable(codec, 0, true);
+		break;
+	default:
+		pr_err("%s: Unexpected input value\n", __func__);
+		break;
+	}
+	return ret;
+}
+
 static int msm_btsco_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 					struct snd_pcm_hw_params *params)
 {
@@ -512,7 +561,7 @@ static int msm8x16_enable_codec_ext_clk(struct snd_soc_codec *codec,
 				cancel_delayed_work_sync(
 					&pdata->enable_mclk_work);
 			} else {
-				pdata->digital_cdc_clk.clk_val = 9600000;
+				pdata->digital_cdc_clk.clk_val = pdata->mclk_freq;
 				afe_set_digital_codec_core_clock(
 						AFE_PORT_ID_PRIMARY_MI2S_RX,
 						&pdata->digital_cdc_clk);
@@ -522,6 +571,7 @@ static int msm8x16_enable_codec_ext_clk(struct snd_soc_codec *codec,
 			msm8x16_wcd_mclk_enable(codec, 1, dapm);
 		}
 	} else {
+		msm8x16_wcd_mclk_enable(codec, 0, dapm);
 		mutex_lock(&pdata->cdc_mclk_mutex);
 		atomic_set(&pdata->mclk_rsc_ref, 0);
 		cancel_delayed_work_sync(&pdata->enable_mclk_work);
@@ -531,7 +581,6 @@ static int msm8x16_enable_codec_ext_clk(struct snd_soc_codec *codec,
 				&pdata->digital_cdc_clk);
 		atomic_set(&pdata->dis_work_mclk, false);
 		mutex_unlock(&pdata->cdc_mclk_mutex);
-		msm8x16_wcd_mclk_enable(codec, 0, dapm);
 	}
 	return ret;
 }
@@ -550,11 +599,11 @@ static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec, int enable,
 	mutex_lock(&pdata->cdc_mclk_mutex);
 	if (enable) {
 		if (atomic_inc_return(&pdata->mclk_rsc_ref) == 1) {
-			pdata->digital_cdc_clk.clk_val = 12288000;
+			pdata->digital_cdc_clk.clk_val = pdata->mclk_freq;
 			afe_set_digital_codec_core_clock(
 					AFE_PORT_ID_PRIMARY_MI2S_RX,
 					&pdata->digital_cdc_clk);
-			pdata->digital_cdc_clk.clk_val = 12288000;
+			pdata->digital_cdc_clk.clk_val = pdata->mclk_freq;
 			afe_set_digital_codec_core_clock(
 					AFE_PORT_ID_QUATERNARY_MI2S_RX,
 					&pdata->digital_cdc_clk);
@@ -580,6 +629,7 @@ static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec, int enable,
 static const struct soc_enum msm_snd_enum[] = {
 	SOC_ENUM_SINGLE_EXT(2, rx_bit_format_text),
 	SOC_ENUM_SINGLE_EXT(2, ter_mi2s_tx_ch_text),
+	SOC_ENUM_SINGLE_EXT(2, loopback_mclk_text),
 };
 
 static const struct snd_kcontrol_new msm_snd_controls[] = {
@@ -589,6 +639,8 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 			msm_ter_mi2s_tx_ch_get, msm_ter_mi2s_tx_ch_put),
 	SOC_ENUM_EXT("MI2S_RX Channels", msm_snd_enum[1],
 			msm_pri_mi2s_rx_ch_get, msm_pri_mi2s_rx_ch_put),
+	SOC_ENUM_EXT("Loopback MCLK", msm_snd_enum[2],
+			loopback_mclk_get, loopback_mclk_put),
 
 };
 
@@ -1776,6 +1828,7 @@ static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
 	const char *codec_type = "qcom,msm-codec-type";
 	const char *hs_micbias_type = "qcom,msm-hs-micbias-type";
 	const char *ext_pa = "qcom,msm-ext-pa";
+	const char *mclk = "qcom,msm-mclk-freq";
 	const char *ptr = NULL;
 	const char *type = NULL;
 	int ret, id;
@@ -1807,6 +1860,15 @@ static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto err;
 	}
+
+	ret = of_property_read_u32(pdev->dev.of_node, mclk, &id);
+	if (ret) {
+		dev_err(&pdev->dev,
+			"%s: missing %s in dt node\n", __func__, card_dev_id);
+		id = DEFAULT_MCLK_RATE;
+	}
+	pdata->mclk_freq = id;
+
 	ret = of_property_read_string(pdev->dev.of_node, codec_type, &ptr);
 	if (ret) {
 		dev_err(&pdev->dev,
@@ -1894,7 +1956,7 @@ static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
 	/* initialize the mclk */
 	pdata->digital_cdc_clk.i2s_cfg_minor_version =
 					AFE_API_VERSION_I2S_CONFIG;
-	pdata->digital_cdc_clk.clk_val = 9600000;
+	pdata->digital_cdc_clk.clk_val = pdata->mclk_freq;
 	pdata->digital_cdc_clk.clk_root = 5;
 	pdata->digital_cdc_clk.reserved = 0;
 	ret = cdc_pdm_get_pinctrl(pdev);
