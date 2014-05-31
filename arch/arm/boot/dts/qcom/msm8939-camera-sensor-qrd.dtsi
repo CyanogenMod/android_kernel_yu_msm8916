@@ -50,9 +50,9 @@
 };
 
 &cci {
-	actuator0: qcom,actuator@6e {
-		cell-index = <3>;
-		reg = <0x6c>;
+	actuator0: qcom,actuator@0 {
+		cell-index = <0>;
+		reg = <0x00>;
 		compatible = "qcom,actuator";
 		qcom,cci-master = <0>;
 	};
