@@ -47,6 +47,9 @@
 #define AVTIMER_LSW_PHY_ADDR 0xFE053008
 #define AVTIMER_MSW_PHY_ADDR_8916 0x7706010
 #define AVTIMER_LSW_PHY_ADDR_8916 0x770600C
+#define AVTIMER_MODE_CTL_PHY_ADDR_8916 0x7706040
+/*AVTimer h/w is configured to generate 27Mhz ticks*/
+#define AVTIMER_TICK_SCALER_8916 27
 #define AVTIMER_ITERATION_CTR 16
 
 #define VFE_PING_FLAG 0xFFFFFFFF
@@ -186,6 +189,9 @@ struct msm_vfe_core_ops {
 	void (*restore_irq_mask) (struct vfe_device *vfe_dev);
 	void (*get_halt_restart_mask) (uint32_t *irq0_mask,
 		uint32_t *irq1_mask);
+	void (*init_vbif_counters) (struct vfe_device *vfe_dev);
+	void (*vbif_clear_counters) (struct vfe_device *vfe_dev);
+	void (*vbif_read_counters) (struct vfe_device *vfe_dev);
 };
 struct msm_vfe_stats_ops {
 	int (*get_stats_idx) (enum msm_isp_stats_type stats_type);
@@ -459,6 +465,13 @@ struct msm_isp_statistics {
 	int32_t skinbhist_overflow;
 };
 
+struct msm_vbif_cntrs {
+	int previous_write_val;
+	int vfe_total_iter;
+	int fb_err_lvl;
+	int total_vbif_cnt_2;
+};
+
 struct vfe_device {
 	struct platform_device *pdev;
 	struct msm_sd_subdev subdev;
@@ -506,8 +519,11 @@ struct vfe_device {
 	uint8_t vt_enable;
 	void __iomem *p_avtimer_msw;
 	void __iomem *p_avtimer_lsw;
+	void __iomem *p_avtimer_ctl;
+	uint8_t avtimer_scaler;
 	uint8_t ignore_error;
 	struct msm_isp_statistics *stats;
+	struct msm_vbif_cntrs vbif_cntrs;
 };
 
 #endif
