@@ -190,3 +190,9 @@
 
 	status = "ok";
 };
+
+&pm8916_chg {
+	status = "ok";
+	qcom,charging-disabled;
+	qcom,disable-follow-on-reset;
+};
