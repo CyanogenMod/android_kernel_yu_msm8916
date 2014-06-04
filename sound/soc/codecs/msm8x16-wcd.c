@@ -1227,7 +1227,7 @@ static const char * const iir1_inp1_text[] = {
 };
 
 static const struct soc_enum adc2_enum =
-	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(adc2_mux_text), adc2_mux_text);
+	SOC_ENUM_SINGLE(0, 0, ARRAY_SIZE(adc2_mux_text), adc2_mux_text);
 
 /* RX1 MIX1 */
 static const struct soc_enum rx_mix1_inp1_chain_enum =
@@ -1329,7 +1329,7 @@ static const struct snd_kcontrol_new rx2_mix2_inp1_mux =
 	SOC_DAPM_ENUM("RX2 MIX2 INP1 Mux", rx2_mix2_inp1_chain_enum);
 
 static const struct snd_kcontrol_new tx_adc2_mux =
-	SOC_DAPM_ENUM("ADC2 MUX Mux", adc2_enum);
+	SOC_DAPM_ENUM_VIRT("ADC2 MUX Mux", adc2_enum);
 
 static int msm8x16_wcd_put_dec_enum(struct snd_kcontrol *kcontrol,
 			      struct snd_ctl_elem_value *ucontrol)
@@ -1653,23 +1653,16 @@ static int msm8x16_wcd_codec_enable_dig_clk(struct snd_soc_dapm_widget *w,
 					0x07, 0x07);
 			snd_soc_update_bits(codec,
 					MSM8X16_WCD_A_ANALOG_BYPASS_MODE,
+					0x40, 0x40);
+			snd_soc_update_bits(codec,
+					MSM8X16_WCD_A_ANALOG_BYPASS_MODE,
 					0x80, 0x80);
 			snd_soc_update_bits(codec,
 					MSM8X16_WCD_A_ANALOG_BYPASS_MODE,
-					0x40, 0x40);
-			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_DIGITAL_CDC_DIG_CLK_CTL,
-					0x20, 0x20);
+					0x02, 0x02);
 			snd_soc_update_bits(codec,
 					MSM8X16_WCD_A_ANALOG_BOOST_EN_CTL,
-					0x9F, 0x9F);
-			usleep_range(CODEC_DELAY_1_MS, CODEC_DELAY_1_1_MS);
-			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_ANALOG_BOOST_EN_CTL,
-					0x40, 0x40);
-			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_ANALOG_CURRENT_LIMIT,
-					0x03, 0x03);
+					0xDF, 0xDF);
 		} else {
 			snd_soc_update_bits(codec, w->reg, 1<<w->shift,
 					1<<w->shift);
@@ -1694,23 +1687,17 @@ static int msm8x16_wcd_codec_enable_dig_clk(struct snd_soc_dapm_widget *w,
 					0x07, 0x0);
 		} else if (msm8x16_wcd->ear_pa_boost_set) {
 			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_ANALOG_SEC_ACCESS,
-					0xA5, 0x00);
-			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_ANALOG_PERPH_RESET_CTL3,
-					0x07, 0x00);
+					MSM8X16_WCD_A_ANALOG_BOOST_EN_CTL,
+					0x80, 0x00);
 			snd_soc_update_bits(codec,
 					MSM8X16_WCD_A_ANALOG_BYPASS_MODE,
-					0xC0, 0x00);
+					0x80, 0x00);
 			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_DIGITAL_CDC_DIG_CLK_CTL,
-					0x20, 0x00);
+					MSM8X16_WCD_A_ANALOG_BYPASS_MODE,
+					0x02, 0x00);
 			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_ANALOG_BOOST_EN_CTL,
-					0xDF, 0x00);
-			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_ANALOG_CURRENT_LIMIT,
-					0x03, 0x00);
+					MSM8X16_WCD_A_ANALOG_BYPASS_MODE,
+					0x40, 0x00);
 		} else {
 			snd_soc_update_bits(codec, w->reg, 1<<w->shift, 0x00);
 		}
@@ -2819,7 +2806,7 @@ static const struct snd_soc_dapm_widget msm8x16_wcd_dapm_widgets[] = {
 	SND_SOC_DAPM_MIXER("ADC2", SND_SOC_NOPM, 0, 0, NULL, 0),
 	SND_SOC_DAPM_MIXER("ADC3", SND_SOC_NOPM, 0, 0, NULL, 0),
 
-	SND_SOC_DAPM_MUX("ADC2 MUX", SND_SOC_NOPM, 0, 0,
+	SND_SOC_DAPM_VIRT_MUX("ADC2 MUX", SND_SOC_NOPM, 0, 0,
 		&tx_adc2_mux),
 
 	SND_SOC_DAPM_MICBIAS("MIC BIAS External",
