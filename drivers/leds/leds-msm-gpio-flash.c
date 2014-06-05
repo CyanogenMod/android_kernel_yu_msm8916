@@ -23,8 +23,31 @@
 #include <linux/list.h>
 #include <linux/pinctrl/consumer.h>
 
+/*#define CONFIG_GPIO_FLASH_DEBUG*/
+#undef CDBG
+#ifdef CONFIG_GPIO_FLASH_DEBUG
+#define CDBG(fmt, args...) pr_err(fmt, ##args)
+#else
+#define CDBG(fmt, args...) do { } while (0)
+#endif
+
 #define LED_GPIO_FLASH_DRIVER_NAME	"qcom,leds-gpio-flash"
 #define LED_TRIGGER_DEFAULT		"none"
+
+#define GPIO_OUT_LOW          (0 << 1)
+#define GPIO_OUT_HIGH         (1 << 1)
+
+enum msm_flash_seq_type_t {
+	GPIO_FLASH_EN,
+	GPIO_FLASH_NOW,
+};
+
+struct msm_flash_ctrl_setting{
+	enum msm_flash_seq_type_t seq_type;
+	long config_flash_on_val;
+	long config_torch_on_val;
+	long config_flash_off_val;
+};
 
 struct led_gpio_flash_data {
 	int flash_en;
@@ -33,8 +56,8 @@ struct led_gpio_flash_data {
 	struct led_classdev cdev;
 	struct pinctrl *pinctrl;
 	struct pinctrl_state *gpio_state_default;
+	struct msm_flash_ctrl_setting ctrl_setting[2];
 };
-
 
 static struct of_device_id led_gpio_flash_of_match[] = {
 	{.compatible = LED_GPIO_FLASH_DRIVER_NAME,},
@@ -52,16 +75,16 @@ static void led_gpio_brightness_set(struct led_classdev *led_cdev,
 	int flash_en = 0, flash_now = 0;
 
 	if (brightness > LED_HALF) {
-		flash_en = 1;
-		flash_now = 1;
+		flash_en = flash_led->ctrl_setting[GPIO_FLASH_EN].config_flash_on_val;
+		flash_now = flash_led->ctrl_setting[GPIO_FLASH_NOW].config_flash_on_val;
 	} else if (brightness > LED_OFF) {
-		flash_en = 1;
-		flash_now = 0;
+		flash_en = flash_led->ctrl_setting[GPIO_FLASH_EN].config_torch_on_val;
+		flash_now = flash_led->ctrl_setting[GPIO_FLASH_NOW].config_torch_on_val;
 	} else {
 		flash_en = 0;
 		flash_now = 0;
 	}
-
+	CDBG("%s:flash_en=%d,flash_now=%d\n",__func__,flash_en,flash_now);
 	rc = gpio_direction_output(flash_led->flash_en, flash_en);
 	if (rc) {
 		pr_err("%s: Failed to set gpio %d\n", __func__,
@@ -93,6 +116,10 @@ int led_gpio_flash_probe(struct platform_device *pdev)
 	const char *temp_str;
 	struct led_gpio_flash_data *flash_led = NULL;
 	struct device_node *node = pdev->dev.of_node;
+	const char *seq_name = NULL;
+	uint32_t array_flash_seq[2];
+	uint32_t array_torch_seq[2];
+	int i = 0;
 	flash_led = devm_kzalloc(&pdev->dev, sizeof(struct led_gpio_flash_data),
 				 GFP_KERNEL);
 	if (flash_led == NULL) {
@@ -113,7 +140,7 @@ int led_gpio_flash_probe(struct platform_device *pdev)
 	}
 
 	flash_led->gpio_state_default = pinctrl_lookup_state(flash_led->pinctrl,
-		"ocp8110_default");
+		"flash_default");
 	if (IS_ERR(flash_led->gpio_state_default)) {
 		pr_err("%s:can not get active pinstate\n", __func__);
 		return -EINVAL;
@@ -162,6 +189,74 @@ int led_gpio_flash_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "%s: Failed to read linux name. rc = %d\n",
 			__func__, rc);
 		goto error;
+	}
+
+	rc = of_property_read_u32_array(node, "qcom,flash-seq-val",
+		array_flash_seq, 2);
+
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+	}
+
+	rc = of_property_read_u32_array(node, "qcom,torch-seq-val",
+		array_torch_seq, 2);
+
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+	}
+
+	for(i = 0; i < 2; i++) {
+		rc = of_property_read_string_index(node,
+			"qcom,op-seq", i,
+			&seq_name);
+		CDBG("%s seq_name[%d] = %s\n", __func__, i,
+			seq_name);
+		if (rc < 0) {
+			dev_err(&pdev->dev,"%s failed %d\n", __func__, __LINE__);
+		}
+
+		if (!strcmp(seq_name, "flash_en")) {
+			flash_led->ctrl_setting[GPIO_FLASH_EN].seq_type =
+				GPIO_FLASH_EN;
+			CDBG("%s:%d seq_type[%d] %d\n", __func__, __LINE__,
+				i, flash_led->ctrl_setting[GPIO_FLASH_EN].seq_type);
+			if(array_flash_seq[i] == 0) {
+				flash_led->ctrl_setting[GPIO_FLASH_EN].config_flash_on_val =
+					GPIO_OUT_LOW;
+			} else {
+				flash_led->ctrl_setting[GPIO_FLASH_EN].config_flash_on_val =
+					GPIO_OUT_HIGH;
+			}
+
+			if(array_torch_seq[i] == 0) {
+				flash_led->ctrl_setting[GPIO_FLASH_EN].config_torch_on_val =
+					GPIO_OUT_LOW;
+			} else {
+				flash_led->ctrl_setting[GPIO_FLASH_EN].config_torch_on_val =
+					GPIO_OUT_HIGH;
+			}
+		} else if (!strcmp(seq_name, "flash_now")) {
+			flash_led->ctrl_setting[GPIO_FLASH_NOW].seq_type =
+				GPIO_FLASH_NOW;
+			CDBG("%s:%d seq_type[%d] %d\n", __func__, __LINE__,
+				i, flash_led->ctrl_setting[i].seq_type);
+			if(array_flash_seq[i] == 0) {
+				flash_led->ctrl_setting[GPIO_FLASH_NOW].config_flash_on_val =
+					GPIO_OUT_LOW;
+			} else {
+				flash_led->ctrl_setting[GPIO_FLASH_NOW].config_flash_on_val =
+					GPIO_OUT_HIGH;
+			}
+
+			if(array_torch_seq[i] == 0) {
+				flash_led->ctrl_setting[GPIO_FLASH_NOW].config_torch_on_val =
+					GPIO_OUT_LOW;
+			} else {
+				flash_led->ctrl_setting[GPIO_FLASH_NOW].config_torch_on_val =
+					GPIO_OUT_HIGH;
+			}
+		}
+
 	}
 
 	platform_set_drvdata(pdev, flash_led);
