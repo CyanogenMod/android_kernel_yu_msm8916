@@ -262,6 +262,11 @@
 		qcom,direct-connect-irqs = <29>;
 	};
 
+	restart@4ab000 {
+		compatible = "qcom,pshold";
+		reg = <0x4ab000 0x4>;
+	};
+
 	acc0:clock-controller@b088000 {
 		compatible = "qcom,arm-cortex-acc";
 		reg = <0x0b088000 0x1000>;
