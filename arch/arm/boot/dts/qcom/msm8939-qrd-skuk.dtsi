@@ -128,7 +128,6 @@
 		i2c-pwr-supply = <&pm8916_l6>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&tps65132_en_default>;
-		status = "disabled";
 
 		regulators {
 			tps65132_pos: pos-boost {
@@ -231,6 +230,8 @@
 };
 
 &mdss_dsi0 {
+	qcom,regulator-ldo-mode;
+	qcom,platform-regulator-settings = [02 09 03 00 20 00 01];
 	qcom,dsi-pref-prim-pan = <&dsi_nt35596_1080p_skuk_video>;
 	pinctrl-names = "mdss_default", "mdss_sleep";
 	pinctrl-0 = <&mdss_dsi_active>;
@@ -242,31 +243,28 @@
 	vsp-supply = <&tps65132_pos>;
 	vsn-supply = <&tps65132_neg>;
 
-	qcom,ctrl-supply-entries {
-		/delete-node/ qcom,ctrl-supply-entry@0;
+	qcom,platform-supply-entry4 {
+		qcom,supply-name = "vsp";
+		qcom,supply-min-voltage = <5800000>;
+		qcom,supply-max-voltage = <5800000>;
+		qcom,supply-enable-load = <200>;
+		qcom,supply-disable-load = <0>;
+		qcom,supply-pre-on-sleep = <0>;
+		qcom,supply-post-on-sleep = <0>;
+		qcom,supply-pre-off-sleep = <0>;
+		qcom,supply-post-off-sleep = <0>;
 	};
-
-	qcom,panel-supply-entries {
-		/delete-node/qcom,panel-supply-entry@0;
-		qcom,panel-supply-entry@2 {
-			qcom,supply-name = "vsp";
-			qcom,supply-min-voltage = <5800000>;
-			qcom,supply-max-voltage = <5800000>;
-			qcom,supply-enable-load = <200>;
-			qcom,supply-disable-load = <0>;
-		};
-		qcom,panel-supply-entry@3 {
-			qcom,supply-name = "vsn";
-			qcom,supply-min-voltage = <5800000>;
-			qcom,supply-max-voltage = <5800000>;
-			qcom,supply-enable-load = <40>;
-			qcom,supply-disable-load = <0>;
-		};
+	qcom,platform-supply-entry5 {
+		qcom,supply-name = "vsn";
+		qcom,supply-min-voltage = <5800000>;
+		qcom,supply-max-voltage = <5800000>;
+		qcom,supply-enable-load = <40>;
+		qcom,supply-disable-load = <0>;
+		qcom,supply-pre-on-sleep = <0>;
+		qcom,supply-post-on-sleep = <0>;
+		qcom,supply-pre-off-sleep = <0>;
+		qcom,supply-post-off-sleep = <0>;
 	};
 
 };
 
-&dsi_nt35596_1080p_skuk_video {
-	qcom,cont-splash-enabled;
-	qcom,esd-check-enabled;
-};
