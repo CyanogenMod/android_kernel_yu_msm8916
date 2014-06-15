@@ -464,7 +464,8 @@ void msm_isp_sof_notify(struct vfe_device *vfe_dev,
 		vfe_dev->axi_data.frame_id[session_id]++;
 		if (vfe_dev->axi_data.frame_id[session_id] == 0)
 			vfe_dev->axi_data.frame_id[session_id] = 1;
-		sof_event.input_intf = frame_src;
+		sof_event.input_intf =
+			vfe_dev->axi_data.session_frame_src_mask[session_id];
 		sof_event.frame_id = vfe_dev->axi_data.frame_id[session_id];
 		sof_event.timestamp = ts->event_time;
 		sof_event.mono_timestamp = ts->buf_time;
@@ -1408,8 +1409,9 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 			wait_for_complete = 1;
 		}
 		session_id = stream_info->session_id;
-		session_mask = vfe_dev->axi_data.
-			session_frame_src_mask[session_id];
+		if (!session_mask)
+			session_mask = vfe_dev->axi_data.
+				session_frame_src_mask[session_id];
 		if (SRC_TO_INTF(stream_info->stream_src) == VFE_PIX_0) {
 			if ((vfe_dev->axi_data.
 				src_info[SRC_TO_INTF(stream_info->stream_src)].
