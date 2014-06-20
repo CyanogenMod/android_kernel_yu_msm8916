@@ -5,6 +5,7 @@
  *
  * Copyright (C) 2012 Alexandra Chin <alexandra.chin@tw.synaptics.com>
  * Copyright (C) 2012 Scott Lin <scott.lin@tw.synaptics.com>
+ * Copyright (c) 2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -80,11 +81,11 @@ static struct bin_attribute attr_data = {
 };
 
 static struct device_attribute attrs[] = {
-	__ATTR(open, S_IWUGO,
-			synaptics_rmi4_show_error,
+	__ATTR(open, S_IWUSR | S_IWGRP,
+			NULL,
 			rmidev_sysfs_open_store),
-	__ATTR(release, S_IWUGO,
-			synaptics_rmi4_show_error,
+	__ATTR(release, S_IWUSR | S_IWGRP,
+			NULL,
 			rmidev_sysfs_release_store),
 	__ATTR(attn_state, S_IRUGO,
 			rmidev_sysfs_attn_state_show,
