@@ -559,7 +559,10 @@ static inline struct clk *mdss_mdp_get_clk(u32 clk_idx)
 static inline int mdss_mdp_panic_signal_supported(
 	struct mdss_data_type *mdata, struct mdss_mdp_pipe *pipe)
 {
-	return (IS_MDSS_MAJOR_MINOR_SAME(mdata->mdp_rev, MDSS_MDP_HW_REV_105) &&
+	return ((IS_MDSS_MAJOR_MINOR_SAME(mdata->mdp_rev,
+					MDSS_MDP_HW_REV_105) ||
+		IS_MDSS_MAJOR_MINOR_SAME(mdata->mdp_rev,
+					MDSS_MDP_HW_REV_108)) &&
 		pipe->mixer_left &&
 		pipe->mixer_left->type == MDSS_MDP_MIXER_TYPE_INTF);
 }
