@@ -122,6 +122,7 @@
 struct qpnp_lbc_irq {
 	int		irq;
 	unsigned long	disabled;
+	bool            is_wake;
 };
 
 enum {
@@ -265,6 +266,8 @@ struct vddtrim_map vddtrim_map[] = {
  * @cfg_float_charge:		enable float charging
  * @charger_disabled:		maintain USB path state.
  * @cfg_charger_detect_eoc:	charger can detect end of charging
+ * @cfg_disable_vbatdet_based_recharge:	keep VBATDET comparator overriden to
+ *				low and VBATDET irq disabled.
  * @cfg_safe_current:		battery safety current setting
  * @cfg_hot_batt_p:		hot battery threshold setting
  * @cfg_cold_batt_p:		eold battery threshold setting
@@ -283,6 +286,7 @@ struct vddtrim_map vddtrim_map[] = {
  * @hw_access_lock:		lock to serialize access to charger registers
  * @ibat_change_lock:		lock to serialize ibat change requests from
  *				USB and thermal.
+ * @irq_lock			lock to serialize enabling/disabling of irq
  * @supported_feature_flag	bitmask for all supported features
  * @vddtrim_alarm		alarm to schedule trim work at regular
  *				interval
@@ -321,6 +325,7 @@ struct qpnp_lbc_chip {
 	unsigned int			cfg_max_voltage_mv;
 	unsigned int			cfg_min_voltage_mv;
 	unsigned int			cfg_charger_detect_eoc;
+	unsigned int			cfg_disable_vbatdet_based_recharge;
 	unsigned int			cfg_batt_weak_voltage_uv;
 	unsigned int			cfg_warm_bat_mv;
 	unsigned int			cfg_cool_bat_mv;
@@ -352,6 +357,7 @@ struct qpnp_lbc_chip {
 	struct mutex			chg_enable_lock;
 	spinlock_t			ibat_change_lock;
 	spinlock_t			hw_access_lock;
+	spinlock_t			irq_lock;
 	struct power_supply		*usb_psy;
 	struct power_supply		*bms_psy;
 	struct power_supply		batt_psy;
@@ -359,6 +365,36 @@ struct qpnp_lbc_chip {
 	struct qpnp_vadc_chip		*vadc_dev;
 	struct qpnp_adc_tm_chip		*adc_tm_dev;
 };
+
+static void qpnp_lbc_enable_irq(struct qpnp_lbc_chip *chip,
+					struct qpnp_lbc_irq *irq)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&chip->irq_lock, flags);
+	if (__test_and_clear_bit(0, &irq->disabled)) {
+		pr_debug("number = %d\n", irq->irq);
+		enable_irq(irq->irq);
+		if (irq->is_wake)
+			enable_irq_wake(irq->irq);
+	}
+	spin_unlock_irqrestore(&chip->irq_lock, flags);
+}
+
+static void qpnp_lbc_disable_irq(struct qpnp_lbc_chip *chip,
+					struct qpnp_lbc_irq *irq)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&chip->irq_lock, flags);
+	if (!__test_and_set_bit(0, &irq->disabled)) {
+		pr_debug("number = %d\n", irq->irq);
+		disable_irq_nosync(irq->irq);
+		if (irq->is_wake)
+			disable_irq_wake(irq->irq);
+	}
+	spin_unlock_irqrestore(&chip->irq_lock, flags);
+}
 
 static int __qpnp_lbc_read(struct spmi_device *spmi, u16 base,
 			u8 *val, int count)
@@ -1112,7 +1148,8 @@ static int get_prop_capacity(struct qpnp_lbc_chip *chip)
 				&& ret.intval <= chip->cfg_soc_resume_limit) {
 			pr_debug("resuming charging at %d%% soc\n",
 					ret.intval);
-			qpnp_lbc_vbatdet_override(chip, OVERRIDE_0);
+			if (!chip->cfg_disable_vbatdet_based_recharge)
+				qpnp_lbc_vbatdet_override(chip, OVERRIDE_0);
 			qpnp_lbc_charger_enable(chip, SOC, 1);
 		}
 		mutex_unlock(&chip->chg_enable_lock);
@@ -1386,11 +1423,7 @@ static int qpnp_batt_power_set_property(struct power_supply *psy,
 		if (val->intval == POWER_SUPPLY_STATUS_FULL &&
 				!chip->cfg_float_charge) {
 			mutex_lock(&chip->chg_enable_lock);
-			/* No override for VBAT_DET_LO comp */
-			rc = qpnp_lbc_vbatdet_override(chip, OVERRIDE_NONE);
-			if (rc)
-				pr_err("Failed to override VBAT_DET rc=%d\n",
-						rc);
+
 			/* Disable charging */
 			rc = qpnp_lbc_charger_enable(chip, SOC, 0);
 			if (rc)
@@ -1398,6 +1431,24 @@ static int qpnp_batt_power_set_property(struct power_supply *psy,
 						rc);
 			else
 				chip->chg_done = true;
+
+			/*
+			 * Enable VBAT_DET based charging:
+			 * To enable charging when VBAT falls below VBAT_DET
+			 * and device stays suspended after EOC.
+			 */
+			if (!chip->cfg_disable_vbatdet_based_recharge) {
+				/* No override for VBAT_DET_LO comp */
+				rc = qpnp_lbc_vbatdet_override(chip,
+							OVERRIDE_NONE);
+				if (rc)
+					pr_err("Failed to override VBAT_DET rc=%d\n",
+							rc);
+				else
+					qpnp_lbc_enable_irq(chip,
+						&chip->irqs[CHG_VBAT_DET_LO]);
+			}
+
 			mutex_unlock(&chip->chg_enable_lock);
 		}
 		break;
@@ -1608,17 +1659,21 @@ static int qpnp_lbc_chg_init(struct qpnp_lbc_chip *chip)
 	}
 
 	/*
+	 * Override VBAT_DET comparator to enable charging
+	 * irrespective of VBAT above VBAT_DET.
+	 */
+	rc = qpnp_lbc_vbatdet_override(chip, OVERRIDE_0);
+	if (rc) {
+		pr_err("Failed to override comp rc=%d\n", rc);
+		return rc;
+	}
+
+	/*
 	 * Disable iterm comparator of linear charger to disable charger
 	 * detecting end of charge condition based on DT configuration
 	 * and float charge configuration.
 	 */
 	if (!chip->cfg_charger_detect_eoc || chip->cfg_float_charge) {
-		if (chip->cfg_float_charge)
-			rc = qpnp_lbc_vbatdet_override(chip, OVERRIDE_0);
-			if (rc) {
-				pr_err("Failed to override comp rc=%d\n", rc);
-				return rc;
-			}
 		rc = qpnp_lbc_masked_write(chip,
 				chip->chgr_base + CHG_IBATTERM_EN_REG,
 				IBAT_TERM_EN_MASK, 0);
@@ -1870,6 +1925,10 @@ static int qpnp_charger_read_dt_props(struct qpnp_lbc_chip *chip)
 			of_property_read_bool(chip->spmi->dev.of_node,
 					"qcom,charger-detect-eoc");
 
+	/* Get the vbatdet disable property */
+	chip->cfg_disable_vbatdet_based_recharge =
+			of_property_read_bool(chip->spmi->dev.of_node,
+					"qcom,disable-vbatdet-based-recharge");
 	/* Disable charging when faking battery values */
 	if (chip->cfg_use_fake_battery)
 		chip->cfg_charging_disabled = true;
@@ -1922,7 +1981,19 @@ static irqreturn_t qpnp_lbc_usbin_valid_irq_handler(int irq, void *_chip)
 			spin_unlock_irqrestore(&chip->ibat_change_lock,
 								flags);
 		} else {
-			qpnp_lbc_charger_enable(chip, CURRENT, 1);
+			/*
+			 * Override VBAT_DET comparator to start charging
+			 * even if VBAT > VBAT_DET.
+			 */
+			if (!chip->cfg_disable_vbatdet_based_recharge)
+				qpnp_lbc_vbatdet_override(chip, OVERRIDE_0);
+
+			/*
+			 * Enable SOC based charging to make sure
+			 * charging gets enabled on USB insertion
+			 * irrespective of battery SOC above resume_soc.
+			 */
+			qpnp_lbc_charger_enable(chip, SOC, 1);
 		}
 
 		pr_debug("Updating usb_psy PRESENT property\n");
@@ -2041,7 +2112,9 @@ static irqreturn_t qpnp_lbc_fastchg_irq_handler(int irq, void *_chip)
 	if (chip->fastchg_on ^ fastchg_on) {
 		chip->fastchg_on = fastchg_on;
 		if (fastchg_on) {
+			mutex_lock(&chip->chg_enable_lock);
 			chip->chg_done = false;
+			mutex_unlock(&chip->chg_enable_lock);
 			/*
 			 * Start alarm timer to periodically calculate
 			 * and update VDD_MAX trim value.
@@ -2058,7 +2131,6 @@ static irqreturn_t qpnp_lbc_fastchg_irq_handler(int irq, void *_chip)
 			pr_debug("power supply changed batt_psy\n");
 			power_supply_changed(&chip->batt_psy);
 		}
-
 	}
 
 	return IRQ_HANDLED;
@@ -2084,17 +2156,25 @@ static irqreturn_t qpnp_lbc_vbatdet_lo_irq_handler(int irq, void *_chip)
 
 	pr_debug("vbatdet-lo triggered\n");
 
-	/* Battery has fallen below the vbatdet threshold and it is
+	/*
+	 * Disable vbatdet irq to prevent interrupt storm when VBAT is
+	 * close to VBAT_DET.
+	 */
+	qpnp_lbc_disable_irq(chip, &chip->irqs[CHG_VBAT_DET_LO]);
+
+	/*
+	 * Override VBAT_DET comparator to 0 to fix comparator toggling
+	 * near VBAT_DET threshold.
+	 */
+	qpnp_lbc_vbatdet_override(chip, OVERRIDE_0);
+
+	/*
+	 * Battery has fallen below the vbatdet threshold and it is
 	 * time to resume charging.
 	 */
 	rc = qpnp_lbc_charger_enable(chip, SOC, 1);
 	if (rc)
 		pr_err("Failed to enable charging\n");
-
-	if (chip->bat_if_base && !rc) {
-		pr_debug("power supply changed batt_psy\n");
-		power_supply_changed(&chip->batt_psy);
-	}
 
 	return IRQ_HANDLED;
 }
@@ -2164,8 +2244,10 @@ do {									\
 								rc);	\
 		} else {						\
 			rc = 0;						\
-			if (wake)					\
+			if (wake) {					\
 				enable_irq_wake(chip->irqs[idx].irq);	\
+				chip->irqs[idx].is_wake = true;		\
+			}						\
 		}							\
 	}								\
 } while (0)
@@ -2191,8 +2273,9 @@ static int qpnp_lbc_request_irqs(struct qpnp_lbc_chip *chip)
 	SPMI_REQUEST_IRQ(chip, CHG_FAILED, rc, chg_failed, 0,
 			IRQF_TRIGGER_RISING, 1);
 
-	SPMI_REQUEST_IRQ(chip, CHG_FAST_CHG, rc, fastchg, 0,
-			IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, 0);
+	SPMI_REQUEST_IRQ(chip, CHG_FAST_CHG, rc, fastchg, 1,
+			IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING
+			| IRQF_ONESHOT, 1);
 
 	SPMI_REQUEST_IRQ(chip, CHG_DONE, rc, chg_done, 0,
 			IRQF_TRIGGER_RISING, 0);
@@ -2226,9 +2309,10 @@ static int qpnp_lbc_get_irqs(struct qpnp_lbc_chip *chip, u8 subtype,
 		SPMI_GET_IRQ_RESOURCE(chip, rc, spmi_resource,
 						CHG_FAST_CHG, fast-chg-on);
 		SPMI_GET_IRQ_RESOURCE(chip, rc, spmi_resource,
-						CHG_VBAT_DET_LO, vbat-det-lo);
-		SPMI_GET_IRQ_RESOURCE(chip, rc, spmi_resource,
 						CHG_FAILED, chg-failed);
+		if (!chip->cfg_disable_vbatdet_based_recharge)
+			SPMI_GET_IRQ_RESOURCE(chip, rc, spmi_resource,
+						CHG_VBAT_DET_LO, vbat-det-lo);
 		if (chip->cfg_charger_detect_eoc)
 			SPMI_GET_IRQ_RESOURCE(chip, rc, spmi_resource,
 						CHG_DONE, chg-done);
@@ -2374,6 +2458,7 @@ static int qpnp_lbc_probe(struct spmi_device *spmi)
 	mutex_init(&chip->chg_enable_lock);
 	spin_lock_init(&chip->hw_access_lock);
 	spin_lock_init(&chip->ibat_change_lock);
+	spin_lock_init(&chip->irq_lock);
 	INIT_WORK(&chip->vddtrim_work, qpnp_lbc_vddtrim_work_fn);
 	alarm_init(&chip->vddtrim_alarm, ALARM_REALTIME, vddtrim_callback);
 
