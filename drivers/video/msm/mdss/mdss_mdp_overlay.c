@@ -1138,8 +1138,9 @@ int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd)
 	struct mdss_mdp_ctl *ctl = mdp5_data->ctl;
 
 	if (ctl->power_on) {
-		if (mdp5_data->mdata->ulps) {
-			rc = mdss_mdp_footswitch_ctrl_ulps(1, &mfd->pdev->dev);
+		if (mdp5_data->mdata->idle_pc) {
+			rc = mdss_mdp_footswitch_ctrl_idle_pc(1,
+				&mfd->pdev->dev);
 			if (rc) {
 				pr_err("footswtich control power on failed rc=%d\n",
 									rc);
@@ -1157,12 +1158,6 @@ int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd)
 
 	pr_debug("starting fb%d overlay\n", mfd->index);
 
-	rc = pm_runtime_get_sync(&mfd->pdev->dev);
-	if (IS_ERR_VALUE(rc)) {
-		pr_err("unable to resume with pm_runtime_get_sync rc=%d\n", rc);
-		goto end;
-	}
-
 	/*
 	 * We need to do hw init before any hw programming.
 	 * Also, hw init involves programming the VBIF registers which
@@ -1176,14 +1171,12 @@ int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd)
 			ret = mdss_iommu_ctrl(1);
 			if (IS_ERR_VALUE(ret)) {
 				pr_err("iommu attach failed ret=%d\n", ret);
-				pm_runtime_put(&mfd->pdev->dev);
 				return ret;
 			}
 			mdss_hw_init(mdss_res);
 			ret = mdss_iommu_ctrl(0);
 			if (IS_ERR_VALUE(ret)) {
 				pr_err("iommu dettach failed ret=%d\n", ret);
-				pm_runtime_put(&mfd->pdev->dev);
 				return ret;
 			}
 		}
@@ -1207,7 +1200,6 @@ int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd)
 ctl_error:
 	mdss_mdp_ctl_destroy(ctl);
 	mdp5_data->ctl = NULL;
-	pm_runtime_put(&mfd->pdev->dev);
 end:
 	return rc;
 }
@@ -1826,7 +1818,8 @@ static void mdss_mdp_overlay_pan_display(struct msm_fb_data_type *mfd)
 	if (mutex_lock_interruptible(&mdp5_data->ov_lock))
 		return;
 
-	if (!mfd->panel_power_on) {
+	if ((!mfd->panel_power_on) && !((mfd->dcm_state == DCM_ENTER) &&
+				(mfd->panel.type == MIPI_CMD_PANEL))) {
 		mutex_unlock(&mdp5_data->ov_lock);
 		return;
 	}
@@ -3115,22 +3108,35 @@ static int mdss_mdp_overlay_on(struct msm_fb_data_type *mfd)
 		mdp5_data->ctl = ctl;
 	}
 
+	rc = pm_runtime_get_sync(&mfd->pdev->dev);
+	if (IS_ERR_VALUE(rc)) {
+		pr_err("unable to resume with pm_runtime_get_sync rc=%d\n", rc);
+		goto end;
+	}
+
 	if (!mfd->panel_info->cont_splash_enabled &&
 		(mfd->panel_info->type != DTV_PANEL)) {
 		rc = mdss_mdp_overlay_start(mfd);
-		if (!IS_ERR_VALUE(rc) &&
-			(mfd->panel_info->type != WRITEBACK_PANEL))
+		if (rc)
+			goto error_pm;
+		if (mfd->panel_info->type != WRITEBACK_PANEL)
 			rc = mdss_mdp_overlay_kickoff(mfd, NULL);
 	} else {
 		rc = mdss_mdp_ctl_setup(mdp5_data->ctl);
 		if (rc)
-			return rc;
+			goto error_pm;
 	}
 
 	if (IS_ERR_VALUE(rc)) {
 		pr_err("Failed to turn on fb%d\n", mfd->index);
 		mdss_mdp_overlay_off(mfd);
+		goto end;
 	}
+
+error_pm:
+	if (rc)
+		pm_runtime_put_sync(&mfd->pdev->dev);
+end:
 	return rc;
 }
 
@@ -3156,6 +3162,11 @@ static int mdss_mdp_overlay_off(struct msm_fb_data_type *mfd)
 
 	if (!mdp5_data->ctl->power_on)
 		return 0;
+
+	if (mdp5_data->mdata->idle_pc) {
+		mdss_mdp_footswitch_ctrl_idle_pc(1, &mfd->pdev->dev);
+		mdss_mdp_ctl_restore(mdp5_data->ctl);
+	}
 
 	mutex_lock(&mdp5_data->ov_lock);
 
