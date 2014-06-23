@@ -629,8 +629,12 @@ static inline struct mdss_mdp_misr_map *mdss_misr_get_map(u32 block_id,
 				value_reg = intf_base +
 					MDSS_MDP_INTF_MISR_SIGNATURE;
 			}
-			/* For msm8916, additional offset of 0x10 is required */
-			if (mdata->mdp_rev == MDSS_MDP_HW_REV_106) {
+			/*
+			 * For msm8916/8939, additional offset of 0x10
+			 * is required
+			 */
+			if ((mdata->mdp_rev == MDSS_MDP_HW_REV_106) ||
+			(mdata->mdp_rev == MDSS_MDP_HW_REV_108)) {
 				ctrl_reg += 0x10;
 				value_reg += 0x10;
 			}
@@ -647,8 +651,8 @@ static inline struct mdss_mdp_misr_map *mdss_misr_get_map(u32 block_id,
 		return NULL;
 	}
 
-	pr_debug("MDP Module Offset of MISR_CTRL = 0x%d MISR SIG = 0x%d intf_base 0x%p\n",
-			map->ctrl_reg, map->value_reg, intf_base);
+	pr_debug("MISR Module(%d) CTRL(0x%x) SIG(0x%x) intf_base(0x%p)\n",
+		block_id, map->ctrl_reg, map->value_reg, intf_base);
 	return map;
 }
 
