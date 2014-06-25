@@ -476,6 +476,12 @@ struct msm_vbif_cntrs {
 	int total_vbif_cnt_2;
 };
 
+struct msm_vfe_hw_init_parms {
+	const char *entries;
+	const char *regs;
+	const char *settings;
+};
+
 struct vfe_device {
 	struct platform_device *pdev;
 	struct msm_sd_subdev subdev;
