@@ -221,7 +221,8 @@ int wcd9xxx_get_logical_addresses(u8 *pgd_la, u8 *inf_la);
 #if defined(CONFIG_WCD9310_CODEC) || \
 	defined(CONFIG_WCD9304_CODEC) || \
 	defined(CONFIG_WCD9320_CODEC) || \
-	defined(CONFIG_WCD9306_CODEC)
+	defined(CONFIG_WCD9306_CODEC) || \
+	defined(CONFIG_SND_SOC_MSM8X16_WCD)
 int __init wcd9xxx_irq_of_init(struct device_node *node,
 			       struct device_node *parent);
 #else
