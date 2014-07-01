@@ -181,3 +181,7 @@
 &qcom_seecom {
 	status = "okay";
 };
+
+&android_usb {
+	qcom,android-usb-cdrom;
+};
