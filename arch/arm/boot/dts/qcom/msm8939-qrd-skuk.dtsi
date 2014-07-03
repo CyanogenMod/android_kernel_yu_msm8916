@@ -256,8 +256,6 @@
 };
 
 &mdss_dsi0 {
-	qcom,regulator-ldo-mode;
-	qcom,platform-regulator-settings = [02 09 03 00 20 00 01];
 	qcom,dsi-pref-prim-pan = <&dsi_nt35596_1080p_skuk_video>;
 	pinctrl-names = "mdss_default", "mdss_sleep";
 	pinctrl-0 = <&mdss_dsi_active>;
@@ -269,9 +267,12 @@
 	vsp-supply = <&tps65132_pos>;
 	vsn-supply = <&tps65132_neg>;
 
+	qcom,ctrl-supply-entries {
+		/delete-node/ qcom,ctrl-supply-entry@0;
+	};
+
 	qcom,panel-supply-entries {
-		#address-cells = <1>;
-		#size-cells = <0>;
+		/delete-node/qcom,panel-supply-entry@0;
 
 		qcom,panel-supply-entry@2 {
 			reg = <2>;
@@ -294,3 +295,7 @@
 
 };
 
+&dsi_nt35596_1080p_skuk_video {
+	qcom,cont-splash-enabled;
+	qcom,esd-check-enabled;
+};
