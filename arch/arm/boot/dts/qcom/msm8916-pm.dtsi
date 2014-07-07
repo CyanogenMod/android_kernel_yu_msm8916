@@ -151,9 +151,8 @@
 				qcom,ss-power = <490>;
 				qcom,energy-overhead = <1030563>;
 				qcom,time-overhead = <1656>;
-				qcom,min-cpu-mode= "pc";
-				qcom,send-rpm-sleep-set;
-				qcom,sync-mode;
+				qcom,min-child-idx = <2>;
+				qcom,notify-rpm;
 			};
 
 			qcom,pm-cpu {
