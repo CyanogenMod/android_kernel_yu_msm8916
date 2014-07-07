@@ -1454,6 +1454,13 @@
 		qcom,gpio-force-stop = <&smp2pgpio_ssr_smp2p_4_out 0 0>;
 		linux,contiguous-region = <&peripheral_mem>;
 	};
+
+	qcom,avtimer {
+		compatible = "qcom,avtimer";
+		reg = <0x0770600C 0x4>,
+			<0x07706010 0x4>;
+		reg-names = "avtimer_lsb_addr", "avtimer_msb_addr";
+	};
 };
 
 #include "msm-pm8916-rpm-regulator.dtsi"
