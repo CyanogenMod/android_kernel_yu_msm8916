@@ -456,6 +456,11 @@ static int mdss_debugfs_perf_init(struct mdss_debug_data *mdd,
 	debugfs_create_u32("threshold_pipe", 0644, mdd->perf,
 		(u32 *)&mdata->max_bw_per_pipe);
 
+	/* Initialize percentage to 0% */
+	mdata->latency_buff_per = 0;
+	debugfs_create_u32("latency_buff_per", 0644, mdd->perf,
+		(u32 *)&mdata->latency_buff_per);
+
 	return 0;
 }
 
