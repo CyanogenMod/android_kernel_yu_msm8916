@@ -67,6 +67,53 @@
 		  "%s: BCL should have acquired\n", __func__); \
 }
 
+static void wcd_mbhc_jack_report(struct wcd_mbhc *mbhc,
+				struct snd_soc_jack *jack, int status, int mask)
+{
+	snd_soc_jack_report_no_dapm(jack, status, mask);
+}
+
+static void __hphocp_off_report(struct wcd_mbhc *mbhc, u32 jack_status,
+				int irq)
+{
+	struct snd_soc_codec *codec;
+
+	pr_debug("%s: clear ocp status %x\n", __func__, jack_status);
+	codec = mbhc->codec;
+	if (mbhc->hph_status & jack_status) {
+		mbhc->hph_status &= ~jack_status;
+		wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
+				    mbhc->hph_status, WCD_MBHC_JACK_MASK);
+		snd_soc_update_bits(codec, MSM8X16_WCD_A_ANALOG_RX_COM_OCP_CTL,
+				0x10, 0x00);
+
+		snd_soc_update_bits(codec, MSM8X16_WCD_A_ANALOG_RX_COM_OCP_CTL,
+				0x10, 0x10);
+		/*
+		 * reset retry counter as PA is turned off signifying
+		 * start of new OCP detection session
+		 */
+		if (mbhc->intr_ids->hph_left_ocp)
+			mbhc->hphlocp_cnt = 0;
+		else
+			mbhc->hphrocp_cnt = 0;
+		wcd9xxx_spmi_enable_irq(irq);
+	}
+}
+
+static void hphrocp_off_report(struct wcd_mbhc *mbhc, u32 jack_status)
+{
+	__hphocp_off_report(mbhc, SND_JACK_OC_HPHR,
+			    mbhc->intr_ids->hph_right_ocp);
+}
+
+static void hphlocp_off_report(struct wcd_mbhc *mbhc, u32 jack_status)
+{
+	__hphocp_off_report(mbhc, SND_JACK_OC_HPHL,
+			    mbhc->intr_ids->hph_left_ocp);
+}
+
+
 static int wcd_event_notify(struct notifier_block *self, unsigned long val,
 				void *data)
 {
@@ -103,6 +150,14 @@ static int wcd_event_notify(struct notifier_block *self, unsigned long val,
 		snd_soc_update_bits(codec,
 				    MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
 				    0xB0, 0xB0);
+		break;
+	case WCD_EVENT_POST_HPHL_PA_OFF:
+		if (mbhc->hph_status & SND_JACK_OC_HPHL)
+			hphlocp_off_report(mbhc, SND_JACK_OC_HPHL);
+		break;
+	case WCD_EVENT_POST_HPHR_PA_OFF:
+		if (mbhc->hph_status & SND_JACK_OC_HPHR)
+			hphrocp_off_report(mbhc, SND_JACK_OC_HPHR);
 		break;
 	default:
 		break;
@@ -171,54 +226,6 @@ static void wcd_cancel_hs_detect_plug(struct wcd_mbhc *mbhc,
 		wcd9xxx_spmi_unlock_sleep();
 	}
 	WCD_MBHC_RSC_LOCK(mbhc);
-}
-
-
-
-static void wcd_mbhc_jack_report(struct wcd_mbhc *mbhc,
-				struct snd_soc_jack *jack, int status, int mask)
-{
-	snd_soc_jack_report_no_dapm(jack, status, mask);
-}
-
-static void __hphocp_off_report(struct wcd_mbhc *mbhc, u32 jack_status,
-				int irq)
-{
-	struct snd_soc_codec *codec;
-
-	pr_debug("%s: clear ocp status %x\n", __func__, jack_status);
-	codec = mbhc->codec;
-	if (mbhc->hph_status & jack_status) {
-		mbhc->hph_status &= ~jack_status;
-		wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
-				    mbhc->hph_status, WCD_MBHC_JACK_MASK);
-		snd_soc_update_bits(codec, MSM8X16_WCD_A_ANALOG_RX_COM_OCP_CTL,
-				0x10, 0x00);
-
-		snd_soc_update_bits(codec, MSM8X16_WCD_A_ANALOG_RX_COM_OCP_CTL,
-				0x10, 0x10);
-		/*
-		 * reset retry counter as PA is turned off signifying
-		 * start of new OCP detection session
-		 */
-		if (mbhc->intr_ids->hph_left_ocp)
-			mbhc->hphlocp_cnt = 0;
-		else
-			mbhc->hphrocp_cnt = 0;
-		wcd9xxx_spmi_enable_irq(irq);
-	}
-}
-
-static void hphrocp_off_report(struct wcd_mbhc *mbhc, u32 jack_status)
-{
-	__hphocp_off_report(mbhc, SND_JACK_OC_HPHR,
-			    mbhc->intr_ids->hph_right_ocp);
-}
-
-static void hphlocp_off_report(struct wcd_mbhc *mbhc, u32 jack_status)
-{
-	__hphocp_off_report(mbhc, SND_JACK_OC_HPHL,
-			    mbhc->intr_ids->hph_left_ocp);
 }
 
 static void wcd_mbhc_clr_and_turnon_hph_padac(struct wcd_mbhc *mbhc)
@@ -604,10 +611,11 @@ static bool wcd_check_cross_conn(struct wcd_mbhc *mbhc)
 	u16 result1, swap_res;
 	struct snd_soc_codec *codec = mbhc->codec;
 	enum wcd_mbhc_plug_type plug_type = mbhc->current_plug;
-	s16 reg, reg1;
+	s16 reg, reg1, reg2;
 
 	reg = snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL);
 	reg1 = snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_2);
+	reg2 = snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MICB_2_EN);
 	/*
 	 * Check if there is any cross connection,
 	 * Micbias and schmitt trigger (HPHL-HPHR)
@@ -635,11 +643,9 @@ static bool wcd_check_cross_conn(struct wcd_mbhc *mbhc)
 		pr_debug("%s: No Cross connection found\n", __func__);
 	}
 
-	/* Disable micbias and schmitt trigger */
+	/* Disable schmitt trigger and restore micbias */
+	snd_soc_write(codec, MSM8X16_WCD_A_ANALOG_MICB_2_EN, reg2);
 	snd_soc_write(codec, MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_2, reg1);
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MICB_2_EN,
-			0x80, 0x00);
 	snd_soc_write(codec, MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL, reg);
 	pr_debug("%s: leave, plug type: %d\n", __func__,  plug_type);
 
@@ -921,7 +927,7 @@ static void wcd_mbhc_detect_plug_type(struct wcd_mbhc *mbhc)
 			goto exit;
 		}
 	} else {
-		if (!result1 && !result2)
+		if (!result1 && !(result2 & 0x01))
 			plug_type = MBHC_PLUG_TYPE_HEADPHONE;
 		else {
 			plug_type = MBHC_PLUG_TYPE_INVALID;
@@ -1310,7 +1316,6 @@ static int wcd_mbhc_initialise(struct wcd_mbhc *mbhc)
 	wcd9xxx_spmi_enable_irq(mbhc->intr_ids->mbhc_sw_intr);
 	wcd9xxx_spmi_enable_irq(mbhc->intr_ids->mbhc_btn_press_intr);
 	wcd9xxx_spmi_enable_irq(mbhc->intr_ids->mbhc_btn_release_intr);
-	wcd9xxx_spmi_enable_irq(mbhc->intr_ids->mbhc_hs_ins_rem_intr);
 	wcd9xxx_spmi_enable_irq(mbhc->intr_ids->hph_left_ocp);
 	wcd9xxx_spmi_enable_irq(mbhc->intr_ids->hph_right_ocp);
 	pr_debug("%s: leave\n", __func__);
@@ -1463,6 +1468,7 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 		       mbhc->intr_ids->mbhc_hs_ins_rem_intr);
 		goto err_mbhc_hs_ins_rem_irq;
 	}
+	wcd9xxx_spmi_disable_irq(mbhc->intr_ids->mbhc_hs_ins_rem_intr);
 
 	ret = wcd9xxx_spmi_request_irq(mbhc->intr_ids->hph_left_ocp,
 				  wcd_mbhc_hphl_ocp_irq, "HPH_L OCP detect",
