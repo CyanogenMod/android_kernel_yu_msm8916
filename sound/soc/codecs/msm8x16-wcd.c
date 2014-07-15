@@ -72,6 +72,13 @@
 #define EAR_PA_DISABLE (0x01 << 3)
 #define SPKR_PA_DISABLE (0x01 << 4)
 
+#define MICBIAS_DEFAULT_VAL 1800000
+#define MICBIAS_MIN_VAL 1600000
+#define MICBIAS_STEP_SIZE 50000
+
+#define VOLTAGE_CONVERTER(value, min_value, step_size)\
+	((value - min_value)/step_size);
+
 enum {
 	AIF1_PB = 0,
 	AIF1_CAP,
@@ -166,6 +173,8 @@ static struct msm8x16_wcd_pdata *msm8x16_wcd_populate_dt_pdata(
 	struct device *dev);
 static int msm8x16_wcd_enable_ext_mb_source(struct snd_soc_codec *codec,
 					    bool turn_on);
+static void msm8x16_trim_btn_reg(struct snd_soc_codec *codec);
+static void msm8x16_wcd_set_micb_v(struct snd_soc_codec *codec);
 
 struct msm8x16_wcd_spmi msm8x16_wcd_modules[MAX_MSM8X16_WCD_DEVICE];
 
@@ -173,8 +182,32 @@ static void *modem_state_notifier;
 
 static struct snd_soc_codec *registered_codec;
 
+static void msm8x16_wcd_compute_impedance(s16 l, s16 r, uint32_t *zl,
+				uint32_t *zr, bool high)
+{
+	int64_t rl = 0, rr = 0;
+
+	if (high) {
+		pr_debug("%s: This plug has high range impedance",
+			  __func__);
+		rl = (int)(10*(l*400 - 200))/12;
+		rr = (int)(10*(r*400 - 200))/12;
+	} else {
+		pr_debug("%s: This plug has low range impedance",
+			__func__);
+		rl = (int)(10*(l*2 - 1))/12;
+		rr = (int)(10*(r*2 - 1))/12;
+	}
+
+	*zl = rl;
+	*zr = rr;
+}
+
 static const struct wcd_mbhc_cb mbhc_cb = {
 	.enable_mb_source = msm8x16_wcd_enable_ext_mb_source,
+	.trim_btn_reg = msm8x16_trim_btn_reg,
+	.compute_impedance = msm8x16_wcd_compute_impedance,
+	.set_micbias_value = msm8x16_wcd_set_micb_v,
 };
 
 int msm8x16_unregister_notifier(struct snd_soc_codec *codec,
@@ -538,6 +571,23 @@ static int msm8x16_wcd_dt_parse_vreg_info(struct device *dev,
 	return 0;
 }
 
+static void msm8x16_wcd_dt_parse_micbias_info(struct device *dev,
+			struct wcd9xxx_micbias_setting *micbias)
+{
+	const char *prop_name = "qcom,cdc-micbias-cfilt-mv";
+	int ret;
+
+	ret = of_property_read_u32(dev->of_node, prop_name,
+			&micbias->cfilt1_mv);
+	if (ret) {
+		dev_dbg(dev, "Looking up %s property in node %s failed",
+			prop_name, dev->of_node->full_name);
+		micbias->cfilt1_mv = MICBIAS_DEFAULT_VAL;
+		return;
+	}
+	return;
+}
+
 static struct msm8x16_wcd_pdata *msm8x16_wcd_populate_dt_pdata(
 						struct device *dev)
 {
@@ -616,6 +666,7 @@ static struct msm8x16_wcd_pdata *msm8x16_wcd_populate_dt_pdata(
 			goto err;
 		}
 	}
+	msm8x16_wcd_dt_parse_micbias_info(dev, &pdata->micbias);
 
 	return pdata;
 err:
@@ -1819,6 +1870,26 @@ static int msm8x16_wcd_codec_enable_dmic(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
+static void msm8x16_trim_btn_reg(struct snd_soc_codec *codec)
+{
+	struct msm8x16_wcd_priv *msm8x16_wcd = snd_soc_codec_get_drvdata(codec);
+
+	if (TOMBAK_IS_1_0(msm8x16_wcd->pmic_rev)) {
+		pr_debug("%s: This device needs to be trimmed\n", __func__);
+		/*
+		 * Calculate the trim value for each device used
+		 * till is comes in production by hardware team
+		 */
+		snd_soc_update_bits(codec,
+				MSM8X16_WCD_A_ANALOG_SEC_ACCESS,
+				0xA5, 0xA5);
+		snd_soc_update_bits(codec,
+				MSM8X16_WCD_A_ANALOG_TRIM_CTRL2,
+				0xFF, 0x30);
+	} else {
+		pr_debug("%s: This device is trimmed at ATE\n", __func__);
+	}
+}
 static int msm8x16_wcd_enable_ext_mb_source(struct snd_soc_codec *codec,
 					    bool turn_on)
 {
@@ -1858,12 +1929,11 @@ static int msm8x16_wcd_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 	struct snd_kcontrol *kcontrol, int event)
 {
 	struct snd_soc_codec *codec = w->codec;
-	struct msm8x16_wcd_priv *msm8x16_wcd = snd_soc_codec_get_drvdata(codec);
-
 	u16 micb_int_reg;
 	char *internal1_text = "Internal1";
 	char *internal2_text = "Internal2";
 	char *internal3_text = "Internal3";
+	char *external2_text = "External2";
 
 	dev_dbg(codec->dev, "%s %d\n", __func__, event);
 	switch (w->reg) {
@@ -1884,7 +1954,7 @@ static int msm8x16_wcd_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 			snd_soc_update_bits(codec, micb_int_reg, 0x80, 0x80);
 		} else if (strnstr(w->name, internal2_text, 30)) {
 			snd_soc_update_bits(codec, micb_int_reg, 0x10, 0x10);
-			snd_soc_update_bits(codec, w->reg, 0x20, 0x00);
+			snd_soc_update_bits(codec, w->reg, 0x60, 0x00);
 		} else if (strnstr(w->name, internal3_text, 30)) {
 			snd_soc_update_bits(codec, micb_int_reg, 0x2, 0x2);
 		}
@@ -1898,24 +1968,34 @@ static int msm8x16_wcd_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 			snd_soc_update_bits(codec, micb_int_reg, 0x40, 0x40);
 		} else if (strnstr(w->name, internal2_text, 30)) {
 			snd_soc_update_bits(codec, micb_int_reg, 0x08, 0x08);
+			msm8x16_notifier_call(codec,
+					WCD_EVENT_PRE_MICBIAS_2_ON);
 		} else if (strnstr(w->name, internal3_text, 30)) {
 			snd_soc_update_bits(codec, micb_int_reg, 0x01, 0x01);
+		} else if (strnstr(w->name, external2_text, 30)) {
+			msm8x16_notifier_call(codec,
+					WCD_EVENT_PRE_MICBIAS_2_ON);
 		}
-		msm8x16_notifier_call(codec, WCD_EVENT_PRE_MICBIAS_2_ON);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		if (strnstr(w->name, internal1_text, 30)) {
 			snd_soc_update_bits(codec, micb_int_reg, 0xC0, 0x40);
-		} else if (strnstr(w->name, internal2_text, 30) &&
-			   (!msm8x16_wcd->mbhc.is_hs_inserted)) {
-			snd_soc_update_bits(codec, micb_int_reg, 0x18, 0x08);
-			snd_soc_update_bits(codec, w->reg, 0x20, 0x20);
+		} else if (strnstr(w->name, internal2_text, 30)) {
+			msm8x16_notifier_call(codec,
+					WCD_EVENT_PRE_MICBIAS_2_OFF);
 		} else if (strnstr(w->name, internal3_text, 30)) {
 			snd_soc_update_bits(codec, micb_int_reg, 0x2, 0x0);
+		} else if (strnstr(w->name, external2_text, 30)) {
+			/*
+			 * send micbias turn off event to mbhc driver and then
+			 * break, as no need to set MICB_1_EN register.
+			 */
+			msm8x16_notifier_call(codec,
+					WCD_EVENT_PRE_MICBIAS_2_OFF);
+			break;
 		}
 		snd_soc_update_bits(codec, MSM8X16_WCD_A_ANALOG_MICB_1_EN,
-				0x45, 0x01);
-		msm8x16_notifier_call(codec, WCD_EVENT_PRE_MICBIAS_2_OFF);
+				0x44, 0x00);
 		break;
 	}
 	return 0;
@@ -2241,12 +2321,17 @@ static int msm8x16_wcd_hph_pa_event(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
-		if (w->shift == 5)
+		if (w->shift == 5) {
 			snd_soc_update_bits(codec,
 				MSM8X16_WCD_A_ANALOG_RX_HPH_L_TEST, 0x04, 0x04);
-		else if (w->shift == 4)
+			msm8x16_notifier_call(codec,
+					WCD_EVENT_PRE_HPHL_PA_ON);
+		} else if (w->shift == 4) {
 			snd_soc_update_bits(codec,
 				MSM8X16_WCD_A_ANALOG_RX_HPH_R_TEST, 0x04, 0x04);
+			msm8x16_notifier_call(codec,
+					WCD_EVENT_PRE_HPHR_PA_ON);
+		}
 		snd_soc_update_bits(codec,
 				MSM8X16_WCD_A_ANALOG_NCP_FBCTRL, 0x20, 0x20);
 		break;
@@ -3003,8 +3088,11 @@ static const struct snd_soc_dapm_widget msm8x16_wcd_dapm_widgets[] = {
 	SND_SOC_DAPM_MICBIAS("MIC BIAS External",
 		MSM8X16_WCD_A_ANALOG_MICB_1_EN, 7, 0),
 
-	SND_SOC_DAPM_MICBIAS("MIC BIAS External2",
-		MSM8X16_WCD_A_ANALOG_MICB_2_EN, 7, 0),
+	SND_SOC_DAPM_MICBIAS_E("MIC BIAS External2",
+		MSM8X16_WCD_A_ANALOG_MICB_2_EN, 7, 0,
+		msm8x16_wcd_codec_enable_micbias, SND_SOC_DAPM_POST_PMU |
+		SND_SOC_DAPM_POST_PMD),
+
 
 	SND_SOC_DAPM_INPUT("AMIC3"),
 
@@ -3188,6 +3276,7 @@ static int msm8x16_wcd_device_up(struct snd_soc_codec *codec)
 	msm8x16_wcd_codec_init_reg(codec);
 	msm8x16_wcd_update_reg_defaults(codec);
 
+	msm8x16_wcd_set_micb_v(codec);
 	wcd_mbhc_stop(&msm8x16_wcd_priv->mbhc);
 	wcd_mbhc_start(&msm8x16_wcd_priv->mbhc,
 			msm8x16_wcd_priv->mbhc.mbhc_cfg);
@@ -3261,6 +3350,21 @@ void msm8x16_wcd_hs_detect_exit(struct snd_soc_codec *codec)
 }
 EXPORT_SYMBOL(msm8x16_wcd_hs_detect_exit);
 
+static void msm8x16_wcd_set_micb_v(struct snd_soc_codec *codec)
+{
+
+	struct msm8x16_wcd *msm8x16 = codec->control_data;
+	struct msm8x16_wcd_pdata *pdata = msm8x16->dev->platform_data;
+	u8 reg_val;
+
+	reg_val = VOLTAGE_CONVERTER(pdata->micbias.cfilt1_mv, MICBIAS_MIN_VAL,
+			MICBIAS_STEP_SIZE);
+	dev_dbg(codec->dev, "cfilt1_mv %d reg_val %x\n",
+			(u32)pdata->micbias.cfilt1_mv, reg_val);
+	snd_soc_update_bits(codec, MSM8X16_WCD_A_ANALOG_MICB_1_VAL,
+			0xF8, (reg_val << 3));
+}
+
 static int msm8x16_wcd_codec_probe(struct snd_soc_codec *codec)
 {
 	struct msm8x16_wcd_priv *msm8x16_wcd_priv;
@@ -3314,11 +3418,14 @@ static int msm8x16_wcd_codec_probe(struct snd_soc_codec *codec)
 	BLOCKING_INIT_NOTIFIER_HEAD(&msm8x16_wcd_priv->notifier);
 
 	wcd_mbhc_init(&msm8x16_wcd_priv->mbhc, codec, &mbhc_cb, &intr_ids,
-			false);
+			true);
 
 	msm8x16_wcd_priv->mclk_enabled = false;
 	msm8x16_wcd_priv->clock_active = false;
 	msm8x16_wcd_priv->config_mode_active = false;
+
+	/* Set initial MICBIAS voltage level */
+	msm8x16_wcd_set_micb_v(codec);
 
 	registered_codec = codec;
 	modem_state_notifier =

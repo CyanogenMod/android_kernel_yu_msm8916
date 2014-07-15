@@ -37,6 +37,24 @@ enum wcd_mbhc_btn_det_mem {
 	WCD_MBHC_BTN_DET_V_BTN_HIGH
 };
 
+struct wcd_mbhc_plug_type_cfg {
+	u8 av_detect;
+	u8 mono_detect;
+	u8 num_ins_tries;
+	u8 reserved0;
+	s16 v_no_mic;
+	s16 v_av_min;
+	s16 v_av_max;
+	s16 v_hs_min;
+	s16 v_hs_max;
+	u16 reserved1;
+} __packed;
+
+enum wcd_mbhc_event_state {
+	WCD_MBHC_EVENT_PA_HPHL,
+	WCD_MBHC_EVENT_PA_HPHR,
+};
+
 struct wcd_mbhc_btn_detect_cfg {
 	u8 num_btn;
 	s16 _v_btn_low[WCD_MBHC_DEF_BUTTONS];
@@ -64,6 +82,9 @@ struct wcd_mbhc_intr {
 
 struct wcd_mbhc_cb {
 	int (*enable_mb_source) (struct snd_soc_codec *, bool);
+	void (*trim_btn_reg) (struct snd_soc_codec *);
+	void (*compute_impedance) (s16 , s16 , uint32_t *, uint32_t *, bool);
+	void (*set_micbias_value) (struct snd_soc_codec *);
 };
 
 struct wcd_mbhc {
@@ -79,7 +100,6 @@ struct wcd_mbhc {
 
 	wait_queue_head_t wait_btn_press;
 	bool is_btn_press;
-	bool is_hs_inserted;
 	u8 current_plug;
 	bool in_swch_irq_handler;
 	bool hphl_swh; /*track HPHL switch NC / NO */
@@ -89,11 +109,13 @@ struct wcd_mbhc {
 	bool hs_detect_work_stop;
 	bool micbias_enable;
 	bool btn_press_intr;
+	bool is_hs_recording;
 
 	struct snd_soc_codec *codec;
 
 	/* track PA/DAC state to sync with userspace */
 	unsigned long hph_pa_dac_state;
+	unsigned long event_state;
 	unsigned long jiffies_atreport;
 
 	/* impedance of hphl and hphr */
@@ -111,8 +133,16 @@ struct wcd_mbhc {
 	struct notifier_block nblock;
 };
 
+#define WCD_MBHC_CAL_SIZE ( \
+	    sizeof(struct wcd_mbhc_plug_type_cfg) + \
+	    sizeof(struct wcd_mbhc_btn_detect_cfg) \
+	)
+
+#define WCD_MBHC_CAL_PLUG_DET_PTR(cali) ( \
+	    (struct wcd_mbhc_plug_type_cfg *) cali)
 #define WCD_MBHC_CAL_BTN_DET_PTR(cali) ( \
-	    (struct wcd_mbhc_btn_detect_cfg *) cali)
+	    (struct wcd_mbhc_btn_detect_cfg *) \
+	    &(WCD_MBHC_CAL_PLUG_DET_PTR(cali)[1]))
 
 int wcd_mbhc_start(struct wcd_mbhc *mbhc,
 		       struct wcd_mbhc_config *mbhc_cfg);
