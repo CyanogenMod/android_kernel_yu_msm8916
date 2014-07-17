@@ -1338,14 +1338,6 @@ static void update_task_ravg(struct task_struct *p, struct rq *rq,
 		mark_start = window_start;
 	} while (new_window);
 
-	if ((event == TASK_WAKE) && (rq->window_start > p->ravg.mark_start) &&
-		(rq->window_start - p->ravg.mark_start > window_size)) {
-			if (long_sleep)
-				*long_sleep = 1;
-			rq->prev_runnable_sum += p->ravg.demand;
-			p->ravg.prev_window = p->ravg.demand;
-	}
-
 	if (event == PICK_NEXT_TASK && !p->ravg.sum)
 		rq->curr_runnable_sum += p->ravg.partial_demand;
 
