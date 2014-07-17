@@ -2059,6 +2059,8 @@ static int __qseecom_load_fw(struct qseecom_dev_handle *data, char *appname)
 	}
 
 exit_disable_clk_vote:
+loadfw_err:
+	kzfree(img_data);
 	__qseecom_disable_clk_scale_down(data);
 
 exit_unregister_bus_bw_need:
