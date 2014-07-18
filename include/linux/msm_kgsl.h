@@ -78,6 +78,7 @@ struct kgsl_pwrlevel {
  * @num_levels:		Number of pwrlevels for the specific device
  * @idle_timeout:	Timeout for GPU to turn its resources off
  * @strtstp_sleepwake:  Flag to decide b/w SLEEP and SLUMBER
+ * @nap_disable:        Flag to decide NAP disable
  * @bus_control:	Flag if independent bus voting is supported
  * @clk_map:		Clocks map per platform
  * @bus_scale_table:	Bus table with different b/w votes
@@ -94,6 +95,7 @@ struct kgsl_device_platform_data {
 	int num_levels;
 	unsigned int idle_timeout;
 	bool strtstp_sleepwake;
+	bool nap_disable;
 	bool bus_control;
 	unsigned int clk_map;
 	unsigned int step_mul;

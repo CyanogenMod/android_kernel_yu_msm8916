@@ -27,6 +27,7 @@
 
 		qcom,idle-timeout = <8>; //<HZ/12>
 		qcom,strtstp-sleepwake;
+		qcom,nap-disable;
 
 		/* Clocks = KGSL_CLK_CORE | KGSL_CLK_IFACE | KGSL_CLK_MEM |
 		KGSL_CLK_MEM_IFACE | KGSL_CLK_ALT_MEM_IFACE */

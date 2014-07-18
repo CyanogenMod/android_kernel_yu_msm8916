@@ -1011,6 +1011,7 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 
 	pwr->interval_timeout = pdata->idle_timeout;
 	pwr->strtstp_sleepwake = pdata->strtstp_sleepwake;
+	pwr->nap_disable = pdata->nap_disable;
 
 	pwr->pm_qos_latency = pdata->pm_qos_latency;
 
@@ -1539,7 +1540,8 @@ void kgsl_active_count_put(struct kgsl_device *device)
 
 	if (atomic_dec_and_test(&device->active_cnt)) {
 		if (device->state == KGSL_STATE_ACTIVE &&
-			device->requested_state == KGSL_STATE_NONE) {
+			device->requested_state == KGSL_STATE_NONE &&
+			!device->pwrctrl.nap_disable) {
 			kgsl_pwrctrl_request_state(device, KGSL_STATE_NAP);
 			queue_work(device->work_queue, &device->idle_check_ws);
 		}

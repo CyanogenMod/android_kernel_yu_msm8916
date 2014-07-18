@@ -78,6 +78,7 @@ Optional Properties:
 			   the chip identification read from the GPU hardware.
 			   This is used to override faulty hardware readings.
 - qcom,strtstp-sleepwake:  Boolean. Enables use of GPU SLUMBER instead of SLEEP for power savings
+- qcom,nap-disable:        Boolean. Avoids NAP state.
 
 - qcom,pm-qos-latency:		Every time GPU wakes up from sleep, driver votes for
 				acceptable maximum latency to the pm-qos driver. This
