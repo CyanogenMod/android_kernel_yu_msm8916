@@ -7859,7 +7859,7 @@ void __init sched_init(void)
 
 #ifdef CONFIG_SCHED_HMP
 	if (num_possible_cpus() > 4)
-		sched_enable_hmp = sched_enable_power_aware = 1;
+		sched_enable_hmp = 1;
 
 	if (sched_enable_hmp)
 		pr_info("HMP scheduling enabled.\n");
