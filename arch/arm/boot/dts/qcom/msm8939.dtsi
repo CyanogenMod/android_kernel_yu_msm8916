@@ -257,6 +257,8 @@
 		clocks = <&clock_rpm clk_qdss_clk>,
 		         <&clock_rpm clk_qdss_a_clk>;
 		clock-names = "core_clk", "core_a_clk";
+
+		qcom,coresight-jtagmm-cpu = <&CPU0>;
 	};
 
 	jtag_mm1: jtagmm@8fd000 {
@@ -268,6 +270,8 @@
 		clocks = <&clock_rpm clk_qdss_clk>,
 		         <&clock_rpm clk_qdss_a_clk>;
 		clock-names = "core_clk", "core_a_clk";
+
+		qcom,coresight-jtagmm-cpu = <&CPU1>;
 	};
 
 	jtag_mm2: jtagmm@8fe000 {
@@ -279,6 +283,8 @@
 		clocks = <&clock_rpm clk_qdss_clk>,
 		         <&clock_rpm clk_qdss_a_clk>;
 		clock-names = "core_clk", "core_a_clk";
+
+		qcom,coresight-jtagmm-cpu = <&CPU2>;
 	};
 
 	jtag_mm3: jtagmm@8ff000 {
@@ -290,6 +296,8 @@
 		clocks = <&clock_rpm clk_qdss_clk>,
 		         <&clock_rpm clk_qdss_a_clk>;
 		clock-names = "core_clk", "core_a_clk";
+
+		qcom,coresight-jtagmm-cpu = <&CPU3>;
 	};
 
 	jtag_mm4: jtagmm@8dc000 {
@@ -301,6 +309,8 @@
 		clocks = <&clock_rpm clk_qdss_clk>,
 		         <&clock_rpm clk_qdss_a_clk>;
 		clock-names = "core_clk", "core_a_clk";
+
+		qcom,coresight-jtagmm-cpu = <&CPU4>;
 	};
 
 	jtag_mm5: jtagmm@8dd000 {
@@ -312,6 +322,8 @@
 		clocks = <&clock_rpm clk_qdss_clk>,
 		         <&clock_rpm clk_qdss_a_clk>;
 		clock-names = "core_clk", "core_a_clk";
+
+		qcom,coresight-jtagmm-cpu = <&CPU5>;
 	};
 
 	jtag_mm6: jtagmm@8de000 {
@@ -323,6 +335,8 @@
 		clocks = <&clock_rpm clk_qdss_clk>,
 		         <&clock_rpm clk_qdss_a_clk>;
 		clock-names = "core_clk", "core_a_clk";
+
+		qcom,coresight-jtagmm-cpu = <&CPU6>;
 	};
 
 	jtag_mm7: jtagmm@8df000 {
@@ -334,6 +348,8 @@
 		clocks = <&clock_rpm clk_qdss_clk>,
 		         <&clock_rpm clk_qdss_a_clk>;
 		clock-names = "core_clk", "core_a_clk";
+
+		qcom,coresight-jtagmm-cpu = <&CPU7>;
 	};
 
 	cpu-pmu {
