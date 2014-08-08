@@ -1878,7 +1878,7 @@ static void mdss_mdp_overlay_pan_display(struct msm_fb_data_type *mfd)
 	pipe->has_buf = 1;
 	mdss_mdp_pipe_unmap(pipe);
 
-	if (fbi->var.xres > mdata->max_mixer_width || mfd->split_display) {
+	if (fbi->var.xres > mdata->max_mixer_width || is_split_lm(mfd)) {
 		ret = mdss_mdp_overlay_get_fb_pipe(mfd, &pipe,
 					   MDSS_MDP_MIXER_MUX_RIGHT);
 		if (ret) {
@@ -3098,7 +3098,7 @@ static struct mdss_mdp_ctl *__mdss_mdp_overlay_ctl_init(
 					mdss_mdp_overlay_handle_vsync;
 	ctl->vsync_handler.cmd_post_flush = false;
 
-	if (mfd->split_display && pdata->next) {
+	if (is_split_lm(mfd)) {
 		/* enable split display */
 		rc = mdss_mdp_ctl_split_display_setup(ctl, pdata->next);
 		if (rc) {
@@ -3332,7 +3332,7 @@ static int mdss_mdp_overlay_handoff(struct msm_fb_data_type *mfd)
 		goto error;
 	}
 
-	if (mfd->split_display) {
+	if (is_split_lm(mfd)) {
 		sctl = mdss_mdp_get_split_ctl(ctl);
 		if (!sctl) {
 			pr_err("cannot get secondary ctl. fail the handoff\n");
