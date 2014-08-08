@@ -350,13 +350,11 @@ static int clock_a53_probe(struct platform_device *pdev)
 	 * that the clocks have already been prepared and enabled by the time
 	 * they take over.
 	 */
-	get_online_cpus();
-	for_each_online_cpu(cpu) {
+	for_each_possible_cpu(cpu) {
 		WARN(clk_prepare_enable(&a53ssmux[cpu/4]->c),
 				"Unable to turn on CPU clock");
 		clk_prepare_enable(&a53ssmux_cci.c);
 	}
-	put_online_cpus();
 	return 0;
 }
 
