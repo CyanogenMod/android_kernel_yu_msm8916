@@ -22,6 +22,7 @@
 
 #define MAX_SESSIONS 2
 
+#define SPLIT_MIXER_OFFSET 0x800
 /* wait for at most 2 vsync for lowest refresh rate (24hz) */
 #define KOFF_TIMEOUT msecs_to_jiffies(84)
 
@@ -102,6 +103,8 @@ static int mdss_mdp_cmd_tearcheck_cfg(struct mdss_mdp_ctl *ctl,
 	struct mdss_mdp_pp_tear_check *te;
 	struct mdss_panel_info *pinfo;
 	u32 vsync_clk_speed_hz, total_lines, vclks_line, cfg;
+	char __iomem *pingpong_base;
+	struct mdss_mdp_cmd_ctx *ctx = ctl->priv_data;
 
 	if (IS_ERR_OR_NULL(ctl->panel_data)) {
 		pr_err("no panel data\n");
@@ -143,21 +146,26 @@ static int mdss_mdp_cmd_tearcheck_cfg(struct mdss_mdp_ctl *ctl,
 	pr_debug("thrd_start =%d thrd_cont=%d\n",
 		te->sync_threshold_start, te->sync_threshold_continue);
 
-	mdss_mdp_pingpong_write(mixer->pingpong_base,
+	pingpong_base = mixer->pingpong_base;
+	/* for dst split pp_num is cmd session (0 and 1) */
+	if (is_split_dst(ctl->mfd))
+		pingpong_base += ctx->pp_num * SPLIT_MIXER_OFFSET;
+
+	mdss_mdp_pingpong_write(pingpong_base,
 		MDSS_MDP_REG_PP_SYNC_CONFIG_VSYNC, cfg);
-	mdss_mdp_pingpong_write(mixer->pingpong_base,
+	mdss_mdp_pingpong_write(pingpong_base,
 		MDSS_MDP_REG_PP_SYNC_CONFIG_HEIGHT, te->sync_cfg_height);
-	mdss_mdp_pingpong_write(mixer->pingpong_base,
+	mdss_mdp_pingpong_write(pingpong_base,
 		MDSS_MDP_REG_PP_VSYNC_INIT_VAL, te->vsync_init_val);
-	mdss_mdp_pingpong_write(mixer->pingpong_base,
+	mdss_mdp_pingpong_write(pingpong_base,
 		MDSS_MDP_REG_PP_RD_PTR_IRQ, te->rd_ptr_irq);
-	mdss_mdp_pingpong_write(mixer->pingpong_base,
+	mdss_mdp_pingpong_write(pingpong_base,
 		MDSS_MDP_REG_PP_START_POS, te->start_pos);
-	mdss_mdp_pingpong_write(mixer->pingpong_base,
+	mdss_mdp_pingpong_write(pingpong_base,
 		MDSS_MDP_REG_PP_SYNC_THRESH,
 		((te->sync_threshold_continue << 16) |
 		 te->sync_threshold_start));
-	mdss_mdp_pingpong_write(mixer->pingpong_base,
+	mdss_mdp_pingpong_write(pingpong_base,
 		MDSS_MDP_REG_PP_TEAR_CHECK_EN, te->tear_check_en);
 	return 0;
 }
@@ -616,25 +624,29 @@ int mdss_mdp_cmd_kickoff(struct mdss_mdp_ctl *ctl, void *arg)
 	return 0;
 }
 
-int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl)
+int mdss_mdp_cmd_intfs_stop(struct mdss_mdp_ctl *ctl, int session)
 {
 	struct mdss_mdp_cmd_ctx *ctx;
 	struct mdss_panel_info *pinfo;
 	unsigned long flags;
-	struct mdss_mdp_vsync_handler *tmp, *handle;
 	int need_wait = 0;
 	int ret = 0;
 
-	ctx = (struct mdss_mdp_cmd_ctx *) ctl->priv_data;
-	if (!ctx) {
-		pr_err("invalid ctx\n");
-		return -ENODEV;
+	if (session >= MAX_SESSIONS)
+		return 0;
+
+	if (is_split_dst(ctl->mfd)) {
+		ret = mdss_mdp_cmd_intfs_stop(ctl, (session + 1));
+		if (IS_ERR_VALUE(ret))
+			return ret;
 	}
 
-	list_for_each_entry_safe(handle, tmp, &ctx->vsync_handlers, list)
-		mdss_mdp_cmd_remove_vsync_handler(ctl, handle);
-	MDSS_XLOG(ctl->num, ctx->koff_cnt, ctx->clk_enabled,
-				ctx->rdptr_enabled, XLOG_FUNC_ENTRY);
+	ctx = &mdss_mdp_cmd_ctx_list[session];
+	if (!ctx->ref_cnt) {
+		pr_err("invalid ctx session: %d\n", session);
+		return -ENODEV;
+	}
+	ctx->ref_cnt--;
 
 	spin_lock_irqsave(&ctx->clk_lock, flags);
 	if (ctx->rdptr_enabled) {
@@ -673,11 +685,41 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl)
 
 	flush_work(&ctx->pp_done_work);
 
+	mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_PING_PONG_RD_PTR,
+		ctx->pp_num, NULL, NULL);
+	mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_PING_PONG_COMP,
+		ctx->pp_num, NULL, NULL);
 
-	mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_PING_PONG_RD_PTR, ctx->pp_num,
-				   NULL, NULL);
-	mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_PING_PONG_COMP, ctx->pp_num,
-				   NULL, NULL);
+	memset(ctx, 0, sizeof(*ctx));
+	pr_debug("%s:-\n", __func__);
+
+	return 0;
+}
+
+int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl)
+{
+	struct mdss_mdp_cmd_ctx *ctx;
+	struct mdss_mdp_vsync_handler *tmp, *handle;
+	int ret, session = 0;
+
+	ctx = (struct mdss_mdp_cmd_ctx *) ctl->priv_data;
+	if (!ctx) {
+		pr_err("invalid ctx\n");
+		return -ENODEV;
+	}
+
+	list_for_each_entry_safe(handle, tmp, &ctx->vsync_handlers, list)
+		mdss_mdp_cmd_remove_vsync_handler(ctl, handle);
+	MDSS_XLOG(ctl->num, ctx->koff_cnt, ctx->clk_enabled,
+				ctx->rdptr_enabled, XLOG_FUNC_ENTRY);
+
+	/* Command mode is supported only starting at INTF1 */
+	session = ctl->intf_num - MDSS_MDP_INTF1;
+	ret = mdss_mdp_cmd_intfs_stop(ctl, session);
+	if (IS_ERR_VALUE(ret)) {
+		pr_err("unable to stop cmd interface: %d\n", ret);
+		return ret;
+	}
 
 	if (ctl->num == 0) {
 		ret = mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_BLANK, NULL);
@@ -687,9 +729,7 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl)
 		WARN(ret, "intf %d unblank error (%d)\n", ctl->intf_num, ret);
 	}
 
-	memset(ctx, 0, sizeof(*ctx));
 	ctl->priv_data = NULL;
-
 	ctl->stop_fnc = NULL;
 	ctl->display_fnc = NULL;
 	ctl->wait_pingpong = NULL;
@@ -703,30 +743,33 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl)
 	return 0;
 }
 
-int mdss_mdp_cmd_start(struct mdss_mdp_ctl *ctl)
+static int mdss_mdp_cmd_intfs_setup(struct mdss_mdp_ctl *ctl,
+			int session)
 {
 	struct mdss_mdp_cmd_ctx *ctx;
 	struct mdss_mdp_mixer *mixer;
-	int i, ret;
+	int ret;
 
-	pr_debug("%s:+\n", __func__);
+	if (session >= MAX_SESSIONS)
+		return 0;
+
+	if (is_split_dst(ctl->mfd)) {
+		ret = mdss_mdp_cmd_intfs_setup(ctl, (session + 1));
+		if (IS_ERR_VALUE(ret))
+			return ret;
+	}
+
+	ctx = &mdss_mdp_cmd_ctx_list[session];
+	if (ctx->ref_cnt) {
+		pr_err("Intf %d already in use\n", session);
+		return -EBUSY;
+	}
+	ctx->ref_cnt++;
 
 	mixer = mdss_mdp_mixer_get(ctl, MDSS_MDP_MIXER_MUX_LEFT);
 	if (!mixer) {
 		pr_err("mixer not setup correctly\n");
 		return -ENODEV;
-	}
-
-	for (i = 0; i < MAX_SESSIONS; i++) {
-		ctx = &mdss_mdp_cmd_ctx_list[i];
-		if (ctx->ref_cnt == 0) {
-			ctx->ref_cnt++;
-			break;
-		}
-	}
-	if (i == MAX_SESSIONS) {
-		pr_err("too many sessions\n");
-		return -ENOMEM;
 	}
 
 	ctl->priv_data = ctx;
@@ -736,7 +779,7 @@ int mdss_mdp_cmd_start(struct mdss_mdp_ctl *ctl)
 	}
 
 	ctx->ctl = ctl;
-	ctx->pp_num = mixer->num;
+	ctx->pp_num = (is_split_dst(ctl->mfd) ? session : mixer->num);
 	init_completion(&ctx->pp_comp);
 	init_completion(&ctx->stop_comp);
 	spin_lock_init(&ctx->clk_lock);
@@ -755,8 +798,8 @@ int mdss_mdp_cmd_start(struct mdss_mdp_ctl *ctl)
 	MDSS_XLOG(ctl->num, ctx->koff_cnt, ctx->clk_enabled,
 					ctx->rdptr_enabled);
 
-	mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_PING_PONG_RD_PTR, ctx->pp_num,
-				   mdss_mdp_cmd_readptr_done, ctl);
+	mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_PING_PONG_RD_PTR,
+		ctx->pp_num, mdss_mdp_cmd_readptr_done, ctl);
 
 	mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_PING_PONG_COMP, ctx->pp_num,
 				   mdss_mdp_cmd_pingpong_done, ctl);
@@ -765,6 +808,22 @@ int mdss_mdp_cmd_start(struct mdss_mdp_ctl *ctl)
 
 	if (ret) {
 		pr_err("tearcheck setup failed\n");
+		return ret;
+	}
+
+	return 0;
+}
+int mdss_mdp_cmd_start(struct mdss_mdp_ctl *ctl)
+{
+	int ret, session = 0;
+
+	pr_debug("%s:+\n", __func__);
+
+	/* Command mode is supported only starting at INTF1 */
+	session = ctl->intf_num - MDSS_MDP_INTF1;
+	ret = mdss_mdp_cmd_intfs_setup(ctl, session);
+	if (IS_ERR_VALUE(ret)) {
+		pr_err("unable to set cmd interface: %d\n", ret);
 		return ret;
 	}
 
