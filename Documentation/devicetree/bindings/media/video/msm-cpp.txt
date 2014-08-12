@@ -16,6 +16,7 @@ Required properties:
 - vdd-supply: phandle to GDSC regulator controlling VFE & CPP core.
 - clock-names: name of the clocks required for the device
 - clock-rates: clock rate in Hz
+- bus_master: Flag for presence of CPP bus master
 
 Example:
 
@@ -33,4 +34,5 @@ Example:
 			"camss_vfe_vfe_clk", "iface_clk", "cpp_core_clk",
 			"cpp_iface_clk", "cpp_bus_clk", "micro_iface_clk";
 	qcom,clock-rates = <0 266670000 0 0 266670000 0 0 0>;
+	bus_master = <0>;
    };

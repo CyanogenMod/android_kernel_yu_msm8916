@@ -270,6 +270,7 @@
 			"cpp_iface_clk", "cpp_bus_clk", "micro_iface_clk",
 			"camss_ahb_clk", "ispif_ahb_clk";
 		qcom,clock-rates = <0 320000000 0 0 320000000 0 0 0 0 80000000>;
+		bus_master = <1>;
 	};
 
 	cci: qcom,cci@1b0c000 {
