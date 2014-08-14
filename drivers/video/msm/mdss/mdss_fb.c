@@ -216,6 +216,8 @@ static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 
 	if (!IS_CALIB_MODE_BL(mfd) && (!mfd->ext_bl_ctrl || !value ||
 							!mfd->bl_level)) {
+		pr_debug("bl_lvl=%d, comm=%s, pid=%d\n", bl_lvl, current->comm,
+							current->tgid);
 		mutex_lock(&mfd->bl_lock);
 		mdss_fb_set_backlight(mfd, bl_lvl);
 		mutex_unlock(&mfd->bl_lock);
@@ -955,6 +957,7 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 			return;
 		}
 		pdata->set_backlight(pdata, temp);
+		mfd->bl_prev_level = mfd->bl_level;
 		mfd->bl_level = bkl_lvl;
 		mfd->bl_level_scaled = temp;
 
@@ -980,7 +983,6 @@ void mdss_fb_update_backlight(struct msm_fb_data_type *mfd)
 			if ((pdata) && (pdata->set_backlight)) {
 				mfd->bl_level = mfd->unset_bl_level;
 				pdata->set_backlight(pdata, mfd->bl_level);
-				mfd->bl_level_scaled = mfd->unset_bl_level;
 				mfd->bl_updated = 1;
 			}
 		}
@@ -1050,6 +1052,7 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 			mdss_fb_set_backlight(mfd, 0);
 			mfd->panel_power_on = false;
 			mfd->bl_updated = 0;
+			mfd->unset_bl_level = mfd->bl_prev_level;
 			mutex_unlock(&mfd->bl_lock);
 
 			ret = mfd->mdp.off_fnc(mfd);
