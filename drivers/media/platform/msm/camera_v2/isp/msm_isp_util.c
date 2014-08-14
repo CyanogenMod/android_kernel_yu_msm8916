@@ -1183,6 +1183,7 @@ static inline void msm_isp_process_overflow_irq(
 {
 	uint32_t overflow_mask;
 	uint32_t halt_restart_mask0, halt_restart_mask1;
+	uint8_t cur_stream_cnt = 0;
 	/*Mask out all other irqs if recovery is started*/
 	if (atomic_read(&vfe_dev->error_info.overflow_state) !=
 		NO_OVERFLOW) {
@@ -1199,6 +1200,16 @@ static inline void msm_isp_process_overflow_irq(
 		get_overflow_mask(&overflow_mask);
 	overflow_mask &= *irq_status1;
 	if (overflow_mask) {
+		cur_stream_cnt = msm_isp_get_curr_stream_cnt(vfe_dev);
+		if (cur_stream_cnt == 0) {
+			/* When immediate stop is issued during streamoff and
+			   AXI bridge is halted, if write masters are still
+			   active, then it's possible to get overflow Irq
+			   because WM is still writing pixels into UB, but UB
+			   has no way to write into bus. Since everything is
+			   being stopped anyway, skip the overflow recovery */
+			return;
+		}
 		pr_warn("%s: Bus overflow detected: 0x%x\n",
 			__func__, overflow_mask);
 		atomic_set(&vfe_dev->error_info.overflow_state,

@@ -507,6 +507,7 @@ struct vfe_device {
 	uint8_t taskletq_reg_update_idx;
 	spinlock_t  tasklet_lock;
 	spinlock_t  shared_data_lock;
+	spinlock_t  sof_lock;
 	struct list_head tasklet_q;
 	struct list_head tasklet_regupdate_q;
 	struct tasklet_struct vfe_tasklet;
