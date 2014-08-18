@@ -236,7 +236,7 @@ source "net/rmnet_data/Kconfig"
 
 config RPS
 	boolean "RPS"
-	depends on SMP && SYSFS && USE_GENERIC_SMP_HELPERS
+	depends on SMP && SYSFS
 	default y
 
 config RFS_ACCEL
