@@ -1103,7 +1103,7 @@ static inline void clear_hmp_request(int cpu) { }
 
 #if defined(CONFIG_SCHED_FREQ_INPUT) || defined(CONFIG_SCHED_HMP)
 
-__read_mostly unsigned int sysctl_sched_ravg_hist_size = 5;
+__read_mostly unsigned int sysctl_sched_ravg_hist_size = 3;
 
 /*
  * copy of sysctl_sched_ravg_hist_size. Required for atomically
@@ -1112,7 +1112,7 @@ __read_mostly unsigned int sysctl_sched_ravg_hist_size = 5;
  *
  * Initialize both to same value!!
  */
-static __read_mostly unsigned int sched_ravg_hist_size = 5;
+static __read_mostly unsigned int sched_ravg_hist_size = 3;
 
 /* Window size (in ns) */
 __read_mostly unsigned int sched_ravg_window = 10000000;
