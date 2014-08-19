@@ -369,3 +369,7 @@
 		interrupts = <1 7 0xff00>;
 	};
 };
+
+&bam_dmux {
+	qcom,no-cpu-affinity;
+};
