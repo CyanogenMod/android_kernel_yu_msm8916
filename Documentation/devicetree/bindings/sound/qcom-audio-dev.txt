@@ -527,6 +527,10 @@ normally open.
 switch type on target typically the switch type will be normally open or
 normally close, value for this property 0 for normally close and 1 for
 normally open.
+- qcom,msm-micbias1-ext-cap : Boolean. Enable micbias1 external
+capacitor mode.
+- qcom,msm-micbias2-ext-cap : Boolean. Enable micbias2 external
+capacitor mode.
 - pinctrl-names : Pincntrl entries to configure the PDM gpio lines and
 		  cross connection switch gpio accordingly
 - pinctrl-0 : This explains the active state of the PDM gpio lines
