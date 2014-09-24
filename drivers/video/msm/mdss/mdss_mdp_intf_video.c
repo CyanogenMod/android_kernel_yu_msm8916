@@ -143,6 +143,9 @@ static int mdss_mdp_video_timegen_setup(struct mdss_mdp_ctl *ctl,
 		display_v_end -= p->h_front_porch;
 	}
 
+	ctl->flush_bits |= BIT(31) >>
+		(ctl->intf_num - MDSS_MDP_INTF0);
+
 	hsync_start_x = p->h_back_porch + p->hsync_pulse_width;
 	hsync_end_x = hsync_period - p->h_front_porch - 1;
 
@@ -966,11 +969,12 @@ static int mdss_mdp_video_intfs_setup(struct mdss_mdp_ctl *ctl,
 			pinfo->bpp);
 	itp.vsync_pulse_width = pinfo->lcdc.v_pulse_width;
 
-	if (mdss_mdp_video_timegen_setup(ctl, &itp)) {
-		pr_err("unable to set timing parameters intfs: %d\n",
-			(inum + MDSS_MDP_INTF0));
-		return -EINVAL;
-	}
+	if (!ctl->panel_data->panel_info.cont_splash_enabled)
+		if (mdss_mdp_video_timegen_setup(ctl, &itp)) {
+			pr_err("unable to set timing parameters intfs: %d\n",
+				(inum + MDSS_MDP_INTF0));
+			return -EINVAL;
+		}
 
 	mdss_mdp_fetch_start_config(ctx, ctl);
 
