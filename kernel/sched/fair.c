@@ -5880,7 +5880,7 @@ static bool update_sd_pick_busiest(struct lb_env *env,
 	 * seen a busy group yet. We want to prioritize spreading
 	 * work over power optimization. */
 	if (!sds->busiest && sg->group_weight == 1 &&
-	    sgs->sum_nr_running &&
+	    sgs->sum_nr_running && (env->idle != CPU_NOT_IDLE) &&
 	    power_cost_at_freq(env->dst_cpu, 0) <
 	    power_cost_at_freq(cpumask_first(sched_group_cpus(sg)), 0)) {
 		env->flags |= LBF_PWR_ACTIVE_BALANCE;
@@ -6600,6 +6600,12 @@ more_balance:
 			per_cpu(dbs_boost_load_moved, this_cpu) = 0;
 
 		}
+
+		/* Assumes one 'busiest' cpu that we pulled tasks from */
+		if (!same_freq_domain(this_cpu, cpu_of(busiest))) {
+			check_for_freq_change(this_rq);
+			check_for_freq_change(busiest);
+		}
 	}
 	if (likely(!active_balance)) {
 		/* We were unbalanced, so reset the balancing interval */
@@ -6748,6 +6754,7 @@ static int active_load_balance_cpu_stop(void *data)
 		.flags		= 0,
 		.loop		= 0,
 	};
+	bool moved = false;
 
 	raw_spin_lock_irq(&busiest_rq->lock);
 
@@ -6777,8 +6784,10 @@ static int active_load_balance_cpu_stop(void *data)
 	if (push_task) {
 		if (push_task->on_rq && push_task->state == TASK_RUNNING &&
 		    task_cpu(push_task) == busiest_cpu &&
-		    cpu_online(target_cpu))
+		    cpu_online(target_cpu)) {
 			move_task(push_task, &env);
+			moved = true;
+		}
 		goto out_unlock_balance;
 	}
 
@@ -6794,10 +6803,12 @@ static int active_load_balance_cpu_stop(void *data)
 		env.sd = sd;
 		schedstat_inc(sd, alb_count);
 
-		if (move_one_task(&env))
+		if (move_one_task(&env)) {
 			schedstat_inc(sd, alb_pushed);
-		else
+			moved = true;
+		} else {
 			schedstat_inc(sd, alb_failed);
+		}
 	}
 	rcu_read_unlock();
 out_unlock_balance:
@@ -6812,6 +6823,12 @@ out_unlock:
 		busiest_rq->push_task = NULL;
 	}
 	raw_spin_unlock_irq(&busiest_rq->lock);
+
+	if (moved && !same_freq_domain(busiest_cpu, target_cpu)) {
+		check_for_freq_change(busiest_rq);
+		check_for_freq_change(target_rq);
+	}
+
 	if (per_cpu(dbs_boost_needed, target_cpu)) {
 		struct migration_notify_data mnd;
 
