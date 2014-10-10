@@ -84,7 +84,8 @@ void mdss_check_dsi_ctrl_status(struct work_struct *work, uint32_t interval)
 	if (mipi->mode == DSI_CMD_MODE)
 		mutex_lock(&mdp5_data->ov_lock);
 
-	if (pstatus_data->mfd->shutdown_pending) {
+	if (pstatus_data->mfd->shutdown_pending ||
+		!pstatus_data->mfd->panel_power_on) {
 		if (mipi->mode == DSI_CMD_MODE)
 			mutex_unlock(&mdp5_data->ov_lock);
 		pr_err("%s: DSI turning off, avoiding panel status check\n",
