@@ -16,7 +16,73 @@ DEFINE_MSM_MUTEX(imx135_mut);
 
 static struct msm_sensor_ctrl_t imx135_s_ctrl;
 
+#ifdef CONFIG_MACH_YULONG
+static int first_time_power_up_imx135 = 1;
+#endif
+
 static struct msm_sensor_power_setting imx135_power_setting[] = {
+#ifdef CONFIG_MACH_YULONG
+	{
+		.seq_type = SENSOR_GPIO,
+		.seq_val = SENSOR_GPIO_STANDBY,
+		.config_val = GPIO_OUT_LOW,
+		.delay = 5,
+	},
+	{
+		.seq_type = SENSOR_GPIO,
+		.seq_val = SENSOR_GPIO_AF_PWDM,
+		.config_val = GPIO_OUT_LOW,
+		.delay = 1,
+	},
+	{
+		.seq_type = SENSOR_GPIO,
+		.seq_val = SENSOR_GPIO_VANA,
+		.config_val = GPIO_OUT_HIGH,
+		.delay = 10,
+	},
+	{
+		.seq_type = SENSOR_GPIO,
+		.seq_val = SENSOR_GPIO_VDIG,
+		.config_val = GPIO_OUT_HIGH,
+		.delay = 0,
+	},
+	{
+		.seq_type = SENSOR_VREG,
+		.seq_val = CAM_VIO,
+		.config_val = 0,
+		.delay = 0,
+	},
+	{
+		.seq_type = SENSOR_VREG,
+		.seq_val = CAM_VAF,
+		.config_val = 0,
+		.delay = 0,
+	},
+	{
+		.seq_type = SENSOR_GPIO,
+		.seq_val = SENSOR_GPIO_STANDBY,
+		.config_val = GPIO_OUT_HIGH,
+		.delay = 10,
+	},
+	{
+		.seq_type = SENSOR_GPIO,
+		.seq_val = SENSOR_GPIO_AF_PWDM,
+		.config_val = GPIO_OUT_HIGH,
+		.delay = 5,
+	},
+	{
+		.seq_type = SENSOR_CLK,
+		.seq_val = SENSOR_CAM_MCLK,
+		.config_val = 24000000,
+		.delay = 10,
+	},
+	{
+		.seq_type = SENSOR_I2C_MUX,
+		.seq_val = 0,
+		.config_val = 0,
+		.delay = 0,
+	},
+#else
 	{
 		.seq_type = SENSOR_VREG,
 		.seq_val = CAM_VDIG,
@@ -77,6 +143,7 @@ static struct msm_sensor_power_setting imx135_power_setting[] = {
 		.config_val = 0,
 		.delay = 0,
 	},
+#endif
 };
 
 static struct v4l2_subdev_info imx135_subdev_info[] = {
@@ -117,6 +184,30 @@ static const struct of_device_id imx135_dt_match[] = {
 };
 
 MODULE_DEVICE_TABLE(of, imx135_dt_match);
+
+#ifdef CONFIG_MACH_YULONG
+int32_t imx135_power_up(struct msm_sensor_ctrl_t *s_ctrl)
+{
+	int32_t rc;
+	if(first_time_power_up_imx135 &&
+		msm_sensor_is_probed(s_ctrl->sensordata->sensor_info->position)){
+		pr_info("do not probe imx135,just return\n");
+		return -1;
+	}
+	rc = msm_sensor_power_up(s_ctrl);
+	if(!rc){
+		pr_info("imx135 probe ok,set first_time_power_up_imx135 to 0");
+		first_time_power_up_imx135 = 0;
+	}
+	return rc;
+}
+static struct msm_sensor_fn_t imx135_sensor_fn_t = {
+	.sensor_config = msm_sensor_config,
+	.sensor_power_up = imx135_power_up,
+	.sensor_power_down = msm_sensor_power_down,
+	.sensor_match_id = msm_sensor_match_id,
+};
+#endif
 
 static struct platform_driver imx135_platform_driver = {
 	.driver = {
@@ -165,6 +256,9 @@ static struct msm_sensor_ctrl_t imx135_s_ctrl = {
 	.msm_sensor_mutex = &imx135_mut,
 	.sensor_v4l2_subdev_info = imx135_subdev_info,
 	.sensor_v4l2_subdev_info_size = ARRAY_SIZE(imx135_subdev_info),
+#ifdef CONFIG_MACH_YULONG
+	.func_tbl = &imx135_sensor_fn_t,
+#endif
 };
 
 module_init(imx135_init_module);

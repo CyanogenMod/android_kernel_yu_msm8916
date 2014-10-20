@@ -48,6 +48,10 @@ struct msm_sensor_fn_t {
 	int (*sensor_power_down) (struct msm_sensor_ctrl_t *);
 	int (*sensor_power_up) (struct msm_sensor_ctrl_t *);
 	int (*sensor_match_id) (struct msm_sensor_ctrl_t *);
+#ifdef CONFIG_MACH_YULONG
+	int (*sensor_prepare_otp)(struct msm_sensor_ctrl_t *s_ctrl);
+	int (*sensor_update_otp) (struct msm_sensor_ctrl_t *);
+#endif
 };
 
 
@@ -75,6 +79,9 @@ struct msm_sensor_ctrl_t {
 	struct device_node *of_node;
 	enum msm_camera_stream_type_t camera_stream_type;
 	uint32_t set_mclk_23880000;
+#ifdef CONFIG_MACH_YULONG
+	uint32_t module_id;
+#endif
 };
 
 int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp);
@@ -109,4 +116,9 @@ int32_t msm_sensor_get_dt_gpio_set_tbl(struct device_node *of_node,
 int32_t msm_sensor_init_gpio_pin_tbl(struct device_node *of_node,
 	struct msm_camera_gpio_conf *gconf, uint16_t *gpio_array,
 	uint16_t gpio_array_size);
+
+#ifdef CONFIG_MACH_YULONG
+bool msm_sensor_is_probed(int position);
+#endif
+
 #endif
