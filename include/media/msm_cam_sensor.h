@@ -1,7 +1,3 @@
-#ifdef CONFIG_MACH_YULONG
-#include <media/msm_cam_sensor_yulong.h>
-#else
-
 #ifndef __LINUX_MSM_CAM_SENSOR_H
 #define __LINUX_MSM_CAM_SENSOR_H
 
@@ -56,6 +52,34 @@
 
 #define MAX_AF_ITERATIONS 3
 #define MAX_NUMBER_OF_STEPS 47
+
+#ifdef CONFIG_MACH_YULONG
+#define SENSOR_ID_OV13850 0xD850
+#define MODULE_TECH_OV13850 (SENSOR_ID_OV13850 << 16 | 0x06)
+#define MODULE_SUNNY_OV13850 (SENSOR_ID_OV13850 << 16 | 0x01)
+#define MODULE_FOXCONN_OV13850 (SENSOR_ID_OV13850 << 16 | 0x11)
+
+#define SENSOR_ID_8865 0x8865
+#define MODULE_SUNNY_8865 (SENSOR_ID_8865 << 16 | 0x01)
+#define MODULE_OFILM_8865 (SENSOR_ID_8865 << 16 | 0x07)
+#define MODULE_FOXCONN_8865 (SENSOR_ID_8865 << 16 | 0x11)
+#define MODULE_TECH_8865 (SENSOR_ID_8865 << 16 | 0x06)
+
+#define SENSOR_ID_OV5648 0x5648
+#define MODULE_SUNNY_OV5648 (SENSOR_ID_OV5648 << 16 | 0x01)
+#define MODULE_OFILM_OV5648 (SENSOR_ID_OV5648 << 16 | 0x07)
+#define MODULE_TECH_OV5648 (SENSOR_ID_OV5648 << 16 | 0x06)
+
+#define SENSOR_ID_OV5693 0x5690
+#define MODULE_TECH_OV5693 (SENSOR_ID_OV5693 << 16 | 0x06)
+
+#define SENSOR_ID_IMX135 0x0135
+#define MODULE_SUNNY_IMX135 (SENSOR_ID_IMX135 << 16 | 0x01)
+#define MODULE_FOXCONN_IMX135 (SENSOR_ID_IMX135 << 16 | 0x02)
+
+
+#define SENSOR_ID_IMX219 0x0219
+#endif
 
 #define MAX_LED_TRIGGERS 3
 
@@ -397,6 +421,9 @@ struct msm_sensor_init_params {
 	enum camb_position_t position;
 	/* sensor mount angle */
 	uint32_t            sensor_mount_angle;
+#ifdef CONFIG_MACH_YULONG
+	uint32_t module_id;
+#endif
 };
 
 struct msm_camera_sensor_slave_info {
@@ -505,6 +532,9 @@ enum msm_sensor_cfg_type_t {
 	CFG_SET_AUTOFOCUS,
 	CFG_CANCEL_AUTOFOCUS,
 	CFG_SET_STREAM_TYPE,
+#ifdef CONFIG_MACH_YULONG
+	CFG_UPDATE_OTP,
+#endif
 };
 
 enum msm_actuator_cfg_type_t {
@@ -715,4 +745,3 @@ struct sensor_init_cfg_data {
 #define MSM_V4L2_PIX_FMT_META v4l2_fourcc('M', 'E', 'T', 'A') /* META */
 
 #endif /* __LINUX_MSM_CAM_SENSOR_H */
-#endif
