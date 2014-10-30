@@ -331,7 +331,7 @@ static int mem_acc_sel_setup(struct mem_acc_regulator *mem_acc_vreg,
 			struct resource *res, int mem_type)
 {
 	int len, rc;
-	char *mem_select_str;
+	char *mem_select_str = NULL;
 
 	mem_acc_vreg->acc_sel_addr[mem_type] = res->start;
 	len = res->end - res->start + 1;

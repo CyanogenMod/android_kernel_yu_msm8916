@@ -2172,7 +2172,7 @@ static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
 {
 	struct snd_soc_card *card;
 	struct msm8916_asoc_mach_data *pdata = NULL;
-	struct pinctrl *pinctrl;
+	struct pinctrl *pinctrl = NULL;
 	const char *card_dev_id = "qcom,msm-snd-card-id";
 	const char *codec_type = "qcom,msm-codec-type";
 	const char *hs_micbias_type = "qcom,msm-hs-micbias-type";

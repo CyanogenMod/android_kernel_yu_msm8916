@@ -545,7 +545,7 @@ struct pil_map_fw_info {
 static void *map_fw_mem(phys_addr_t paddr, size_t size, void *data)
 {
 	struct pil_map_fw_info *info = data;
-	void *base;
+	void *base = NULL;
 
 	if (cma_region_is_removed(info->dev))
 		base = ioremap(paddr, size);
