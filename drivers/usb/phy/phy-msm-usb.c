@@ -1711,10 +1711,6 @@ out:
 	return NOTIFY_OK;
 }
 
-#ifdef CONFIG_SMB135X_CHARGER
-extern int smb135x_enable_otg_mode(void);
-extern int smb135x_disable_otg_mode(void);
-#endif
 static void msm_hsusb_vbus_power(struct msm_otg *motg, bool on)
 {
 	int ret;
@@ -1743,22 +1739,14 @@ static void msm_hsusb_vbus_power(struct msm_otg *motg, bool on)
 	 */
 	if (on) {
 		msm_otg_notify_host_mode(motg, on);
-#ifdef CONFIG_SMB135X_CHARGER
-		ret = smb135x_enable_otg_mode();
-#else
 		ret = regulator_enable(vbus_otg);
-#endif
 		if (ret) {
 			pr_err("unable to enable vbus_otg\n");
 			return;
 		}
 		vbus_is_on = true;
 	} else {
-#ifdef CONFIG_SMB135X_CHARGER
-		ret = smb135x_disable_otg_mode();
-#else
 		ret = regulator_disable(vbus_otg);
-#endif
 		if (ret) {
 			pr_err("unable to disable vbus_otg\n");
 			return;
@@ -1786,9 +1774,7 @@ static int msm_otg_set_host(struct usb_otg *otg, struct usb_bus *host)
 		vbus_otg = devm_regulator_get(motg->phy.dev, "vbus_otg");
 		if (IS_ERR(vbus_otg)) {
 			pr_err("Unable to get vbus_otg\n");
-#ifndef CONFIG_SMB135X_CHARGER
 			return PTR_ERR(vbus_otg);
-#endif
 		}
 	}
 
@@ -2653,11 +2639,7 @@ static void msm_chg_detect_work(struct work_struct *w)
 	queue_delayed_work(system_nrt_wq, &motg->chg_work, delay);
 }
 
-#ifdef CONFIG_SMB135X_CHARGER
-#define VBUS_INIT_TIMEOUT	msecs_to_jiffies(10000)
-#else
 #define VBUS_INIT_TIMEOUT	msecs_to_jiffies(5000)
-#endif
 
 /*
  * We support OTG, Peripheral only and Host only configurations. In case
@@ -2887,10 +2869,6 @@ static void msm_otg_sm_work(struct work_struct *w)
 						OTG_STATE_B_PERIPHERAL;
 					break;
 				case USB_SDP_CHARGER:
-#ifdef CONFIG_SMB135X_CHARGER
-					msm_otg_notify_charger(motg,
-							IDEV_CHG_MIN);
-#endif
 					msm_otg_start_peripheral(otg, 1);
 					otg->phy->state =
 						OTG_STATE_B_PERIPHERAL;
@@ -4261,10 +4239,8 @@ static int msm_otg_setup_devices(struct platform_device *ofdev,
 		host_pdev = msm_otg_add_pdev(ofdev, host_name);
 		if (IS_ERR(host_pdev)) {
 			retval = PTR_ERR(host_pdev);
-#ifndef CONFIG_SMB135X_CHARGER
 			if (mode == USB_OTG)
 				platform_device_unregister(gadget_pdev);
-#endif
 		}
 		break;
 	default:
