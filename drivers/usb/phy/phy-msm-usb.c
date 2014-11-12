@@ -1711,6 +1711,10 @@ out:
 	return NOTIFY_OK;
 }
 
+#ifdef CONFIG_YL_BQ24157_CHARGER
+extern int bq24157_enable_otg_mode(void);
+extern int bq24157_disable_otg_mode(void);
+#endif
 static void msm_hsusb_vbus_power(struct msm_otg *motg, bool on)
 {
 	int ret;
@@ -1739,14 +1743,22 @@ static void msm_hsusb_vbus_power(struct msm_otg *motg, bool on)
 	 */
 	if (on) {
 		msm_otg_notify_host_mode(motg, on);
+#ifdef CONFIG_YL_BQ24157_CHARGER
+		ret = bq24157_enable_otg_mode();
+#else
 		ret = regulator_enable(vbus_otg);
+#endif
 		if (ret) {
 			pr_err("unable to enable vbus_otg\n");
 			return;
 		}
 		vbus_is_on = true;
 	} else {
+#ifdef CONFIG_YL_BQ24157_CHARGER
+		ret = bq24157_disable_otg_mode();
+#else
 		ret = regulator_disable(vbus_otg);
+#endif
 		if (ret) {
 			pr_err("unable to disable vbus_otg\n");
 			return;
@@ -2628,6 +2640,11 @@ static void msm_chg_detect_work(struct work_struct *w)
 		if (aca_enabled())
 			udelay(100);
 		msm_chg_enable_aca_intr(motg);
+#ifdef CONFIG_MACH_YULONG
+		/* Enable VDP_SRC in case of DCP charger */
+		if (motg->chg_type == USB_DCP_CHARGER)
+			ulpi_write(phy, 0x2, 0x85);
+#endif
 		dev_dbg(phy->dev, "chg_type = %s\n",
 			chg_to_string(motg->chg_type));
 		queue_work(system_nrt_wq, &motg->sm_work);
@@ -2827,8 +2844,10 @@ static void msm_otg_sm_work(struct work_struct *w)
 			case USB_CHG_STATE_DETECTED:
 				switch (motg->chg_type) {
 				case USB_DCP_CHARGER:
+#ifndef CONFIG_MACH_YULONG
 					/* Enable VDP_SRC */
 					ulpi_write(otg->phy, 0x2, 0x85);
+#endif
 					if (motg->ext_chg_opened) {
 						init_completion(
 							&motg->ext_chg_wait);
@@ -2869,6 +2888,9 @@ static void msm_otg_sm_work(struct work_struct *w)
 						OTG_STATE_B_PERIPHERAL;
 					break;
 				case USB_SDP_CHARGER:
+#ifdef CONFIG_MACH_YULONG
+					msm_otg_set_power(otg->phy, 500);
+#endif
 					msm_otg_start_peripheral(otg, 1);
 					otg->phy->state =
 						OTG_STATE_B_PERIPHERAL;
@@ -4002,6 +4024,31 @@ static int otg_power_set_property_usb(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_TYPE:
 		psy->type = val->intval;
+#ifdef CONFIG_MACH_YULONG
+		switch (psy->type) {
+			case POWER_SUPPLY_TYPE_USB:
+				motg->chg_type = USB_SDP_CHARGER;
+				break;
+			case POWER_SUPPLY_TYPE_USB_DCP:
+				motg->chg_type = USB_DCP_CHARGER;
+				break;
+			case POWER_SUPPLY_TYPE_USB_CDP:
+				motg->chg_type = USB_CDP_CHARGER;
+				break;
+			case POWER_SUPPLY_TYPE_USB_ACA:
+				motg->chg_type = USB_PROPRIETARY_CHARGER;
+				break;
+			default:
+				motg->chg_type = USB_INVALID_CHARGER;
+				break;
+		}
+
+		if (motg->chg_type != USB_INVALID_CHARGER)
+			motg->chg_state = USB_CHG_STATE_DETECTED;
+
+		dev_dbg(motg->phy.dev, "%s: charger type = %s\n", __func__,
+				chg_to_string(motg->chg_type));
+#endif
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		motg->usbin_health = val->intval;
