@@ -18,7 +18,7 @@
  */
 
 #ifndef _LINUX_GOODIX_TOUCH_H
-#define	_LINUX_GOODIX_TOUCH_H
+#define _LINUX_GOODIX_TOUCH_H
 
 #include <linux/kernel.h>
 #include <linux/hrtimer.h>
@@ -47,9 +47,9 @@ struct goodix_ts_data {
     struct hrtimer timer;
     struct work_struct  work;
 #if defined(CONFIG_HAS_EARLYSUSPEND)
-	struct early_suspend early_suspend;
+    struct early_suspend early_suspend;
 #elif defined(CONFIG_FB)
-	struct notifier_block fb_notif;
+    struct notifier_block fb_notif;
 #endif
     s32 irq_is_disable;
     s32 use_irq;
@@ -70,10 +70,11 @@ struct goodix_ts_data {
     u8  fw_error;
     struct mutex reset_mutex;
     struct mutex doze_mutex;
-    struct tw_platform_data *pdata;		
+    struct mutex sleep_mutex; //add sleep mutex when TW enter sleep mode by liuhilong@yulong.com on 2014-12-1
+    struct tw_platform_data *pdata;
     struct pinctrl *ts_pinctrl;
-	struct pinctrl_state *gpio_state_active;
-	struct pinctrl_state *gpio_state_suspend;
+    struct pinctrl_state *gpio_state_active;
+    struct pinctrl_state *gpio_state_suspend;
 };
 
 extern u16 show_len;
@@ -105,8 +106,8 @@ extern u16 total_len;
 #define GTP_REG_SENSOR_ID     0x814A
 #define GTP_REG_CONFIG_DATA   0x8047
 #define GTP_REG_VERSION       0x8140
-#define GTP_I2C_RETRY_3		3
-#define GTP_I2C_RETRY_5		5
+#define GTP_I2C_RETRY_3       3
+#define GTP_I2C_RETRY_5       5
 #define GTP_REG_REPORT_RATE   0x8056
 
 #define RESOLUTION_LOC        3
@@ -163,29 +164,29 @@ extern unsigned char GTP_DEBUG_ON;
 #define ERROR_TIMEOUT           110 //ETIMEDOUT
 //--------------------------------------------------------
 /* GTP CM_HEAD RW flags */
-#define GTP_RW_READ			0
-#define GTP_RW_WRITE			1
-#define GTP_RW_READ_IC_TYPE		2
-#define GTP_RW_WRITE_IC_TYPE		3
-#define GTP_RW_FILL_INFO		4
-#define GTP_RW_NO_WRITE			5
-#define GTP_RW_READ_ERROR		6
-#define GTP_RW_DISABLE_IRQ		7
-#define GTP_RW_READ_VERSION		8
-#define GTP_RW_ENABLE_IRQ		9
-#define GTP_RW_ENTER_UPDATE_MODE	11
-#define GTP_RW_LEAVE_UPDATE_MODE	13
-#define GTP_RW_UPDATE_FW		15
-#define GTP_RW_CHECK_RAWDIFF_MODE	17
+#define GTP_RW_READ             0
+#define GTP_RW_WRITE            1
+#define GTP_RW_READ_IC_TYPE     2
+#define GTP_RW_WRITE_IC_TYPE    3
+#define GTP_RW_FILL_INFO        4
+#define GTP_RW_NO_WRITE         5
+#define GTP_RW_READ_ERROR       6
+#define GTP_RW_DISABLE_IRQ      7
+#define GTP_RW_READ_VERSION     8
+#define GTP_RW_ENABLE_IRQ       9
+#define GTP_RW_ENTER_UPDATE_MODE    11
+#define GTP_RW_LEAVE_UPDATE_MODE    13
+#define GTP_RW_UPDATE_FW        15
+#define GTP_RW_CHECK_RAWDIFF_MODE   17
 
 /* GTP need flag or interrupt */
-#define GTP_NO_NEED			0
-#define GTP_NEED_FLAG			1
-#define GTP_NEED_INTERRUPT		2
+#define GTP_NO_NEED             0
+#define GTP_NEED_FLAG           1
+#define GTP_NEED_INTERRUPT      2
 //--------------------------------------------------------
 //*****************************End of Part III********************************
 int gtp_i2c_read_dbl_check(struct i2c_client *client, u16 addr,
-					u8 *rxbuf, int len);
+                    u8 *rxbuf, int len);
 s32 gtp_send_cfg(struct i2c_client *client);
 void gtp_reset_guitar(struct i2c_client *client, s32 ms);
 void gtp_irq_disable(struct goodix_ts_data *ts);
