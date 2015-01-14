@@ -347,3 +347,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&usbid_default>;
 };
+
+&blsp1_uart2 {
+    status = "ok";
+};
