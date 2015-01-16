@@ -36,6 +36,99 @@
 		qcom,gpio-req-tbl-label = "FLASH_EN",
 			"FLASH_NOW";
 	};
+
+	eeprom0: qcom,eeprom@25 {
+		cell-index = <1>;
+		reg = <0x25 0x0>;
+		qcom,eeprom-name = "sunny_imx214";
+		compatible = "qcom,eeprom";
+		qcom,slave-addr = <0xa0>;
+		qcom,cci-master = <0>;
+		qcom,num-blocks = <8>;
+		qcom,page0 = <0 0 0 0 0 0>;
+		qcom,poll0 = <0 0 0 0 0 0>;
+		qcom,saddr0 = <0xAC>;
+		qcom,mem0 = <12 0x44 1 0 1 0>;
+		qcom,page1 = <0 0 0 0 0 0>;
+		qcom,poll1 = <0 0 0 0 0 0>;
+		qcom,saddr1 = <0xA0>;
+		qcom,mem1 = <255 0x01 1 0 1 0>;
+		qcom,page2 = <0 0 0 0 0 0>;
+		qcom,poll2 = <0 0 0 0 0 0>;
+		qcom,saddr2 = <0xA4>;
+		qcom,mem2 = <256 0x00 1 0 1 0>;
+		qcom,poll3 = <0 0 0 0 0 0>;
+		qcom,saddr3 = <0xA6>;
+		qcom,mem3 = <256 0x00 1 0 1 0>;
+		qcom,page4 = <0 0 0 0 0 0>;
+		qcom,poll4 = <0 0 0 0 0 0>;
+		qcom,saddr4 = <0xA8>;
+		qcom,mem4 = <256 0x00 1 0 1 0>;
+		qcom,page5 = <0 0 0 0 0 0>;
+		qcom,poll5 = <0 0 0 0 0 0>;
+		qcom,saddr5 = <0xAA>;
+		qcom,mem5 = <256 0x00 1 0 1 0>;
+		qcom,page6 = <0 0 0 0 0 0>;
+		qcom,poll6 = <0 0 0 0 0 0>;
+		qcom,saddr6 = <0xAC>;
+		qcom,mem6 = <47 0x00 1 0 1 0>;
+		qcom,page7 = <0 0 0 0 0 0>;
+		qcom,poll7 = <0 0 0 0 0 0>;
+		qcom,saddr7 = <0xAC>;
+		qcom,mem7 = <14 0x56 1 0 1 0>;
+		cam_vdig-supply = <&pm8916_l6>;
+		cam_vio-supply = <&pm8916_l6>;
+		cam_vana-supply = <&pm8916_l6>;
+		cam_vaf-supply = <&pm8916_l10>;
+		qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana", "cam_vaf";
+		qcom,cam-vreg-type = <0 0 0 0>;
+		qcom,cam-vreg-min-voltage = <0 1800000 0 2800000>;
+		qcom,cam-vreg-max-voltage = <0 1800000 0 2800000>;
+		qcom,cam-vreg-op-mode = <0 105000 0 100000>; //Q
+		pinctrl-names = "cam_default", "cam_suspend";
+		pinctrl-0 = <&cam_sensor_mclk0_default &cam_sensor_rear_default>;
+		pinctrl-1 = <&cam_sensor_mclk0_sleep &cam_sensor_rear_sleep>;
+		qcom,gpio-no-mux = <0>;
+		gpios = <&msm_gpio 26 0>,
+			<&msm_gpio 16 0>,
+			<&msm_gpio 119 0>,
+			<&msm_gpio 120 0>,
+			<&msm_gpio 34 0>;
+		qcom,gpio-standby = <1>;
+		qcom,gpio-vana = <2>;
+		qcom,gpio-vdig = <3>;
+		qcom,gpio-af-pwdm = <4>;
+		qcom,gpio-req-tbl-num = <0 1 2 3 4>;
+		qcom,gpio-req-tbl-flags = <1 0 0 0 0>;
+		qcom,gpio-req-tbl-label =
+			"CAMIF_MCLK",
+			"CAM_STANDBY",
+			"CAM_VANA",
+			"CAM_VDIG",
+			"CAM_AF_PWDM";
+		qcom,cam-power-seq-type =
+			"sensor_gpio",
+			"sensor_gpio",
+			"sensor_gpio",
+			"sensor_vreg",
+			"sensor_vreg",
+			"sensor_clk",
+			"sensor_gpio";
+		qcom,cam-power-seq-val =
+			"sensor_gpio_standby",
+			"sensor_gpio_vdig",
+			"sensor_gpio_vana",
+			"cam_vio",
+			"cam_vaf",
+			"sensor_cam_mclk",
+			"sensor_gpio_standby";
+		qcom,cam-power-seq-cfg-val = <0 1 1 1 1 24000000 1>;
+		qcom,cam-power-seq-delay = <10 10 10 10 10 10 10>;
+		clocks = <&clock_gcc clk_mclk0_clk_src>,
+			<&clock_gcc clk_gcc_camss_mclk0_clk>;
+		clock-names = "cam_src_clk", "cam_clk";
+	};
+
 	qcom,camera@20 {
 		cell-index = <0>;
 		compatible = "qcom,imx135";
@@ -103,6 +196,84 @@
 			"sensor_cam_mclk",
 			"none";
 		qcom,cam-power-seq-cfg-val = <0 0 0 0 0 1 1 0 1 1 24000000 0>;
+		qcom,cam-power-seq-delay = <5 5 5 5 5 5 5 5 5 5 5 5>;
+		qcom,csi-lane-assign = <0x4320>;
+		qcom,csi-lane-mask = <0x1f>;
+		qcom,sensor-position = <0>;
+		qcom,sensor-mode = <1>;
+		qcom,cci-master = <0>;
+		status = "ok";
+		clocks = <&clock_gcc clk_mclk0_clk_src>,
+			<&clock_gcc clk_gcc_camss_mclk0_clk>;
+		clock-names = "cam_src_clk", "cam_clk";
+	};
+
+	qcom,camera@21 {
+		cell-index = <0>;
+		compatible = "qcom,imx214";
+		reg = <0x21>;
+		qcom,slave-id = <0x20 0x0016 0x0214>;
+		qcom,csiphy-sd-index = <0>;
+		qcom,csid-sd-index = <0>;
+		qcom,mount-angle = <90>;
+		qcom,sensor-name = "imx214_cp8675";
+		qcom,actuator-src = <&actuator0>;
+		qcom,led-flash-src = <&led_flash0>;
+		cam_vdig-supply = <&pm8916_l6>;
+		cam_vio-supply = <&pm8916_l6>;
+		cam_vana-supply = <&pm8916_l6>;
+		cam_vaf-supply = <&pm8916_l10>;
+		qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana","cam_vaf";
+		qcom,cam-vreg-type = <0 0 0 0>;
+		qcom,cam-vreg-min-voltage = <0 1800000 0 2800000>;
+		qcom,cam-vreg-max-voltage = <0 1800000 0 2800000>;
+		qcom,cam-vreg-op-mode = <0 105000 0 100000>; //Q
+		pinctrl-names = "cam_default", "cam_suspend";
+		pinctrl-0 = <&cam_sensor_mclk0_default &cam_sensor_rear_default>;
+		pinctrl-1 = <&cam_sensor_mclk0_sleep &cam_sensor_rear_sleep>;
+		qcom,gpio-no-mux = <0>;
+		gpios = <&msm_gpio 26 0>,
+			<&msm_gpio 16 0>,
+			<&msm_gpio 119 0>,
+			<&msm_gpio 120 0>,
+			<&msm_gpio 34 0>;
+		qcom,gpio-standby = <1>;
+		qcom,gpio-vana = <2>;
+		qcom,gpio-vdig = <3>;
+		qcom,gpio-af-pwdm = <4>;
+		qcom,gpio-req-tbl-num = <0 1 2 3 4>;
+		qcom,gpio-req-tbl-flags = <1 0 0 0 0>;
+		qcom,gpio-req-tbl-label =
+			"CAMIF_MCLK",
+			"CAM_STANDBY",
+			"CAM_VANA",
+			"CAM_VDIG",
+			"CAM_AF_PWDM";
+		qcom,cam-power-seq-type = "sensor_gpio",
+			"sensor_gpio",
+			"sensor_gpio",
+			"sensor_gpio",
+			"sensor_vreg",
+			"sensor_gpio",
+			"sensor_gpio",
+			"sensor_vreg",
+			"sensor_clk",
+			"sensor_gpio",
+			"sensor_gpio",
+			"sensor_i2c_mux";
+		qcom,cam-power-seq-val = "sensor_gpio_standby",
+			"sensor_gpio_af_pwdm",
+			"sensor_gpio_vana",
+			"sensor_gpio_vdig",
+			"cam_vio",
+			"sensor_gpio_vana",
+			"sensor_gpio_vdig",
+			"cam_vaf",
+			"sensor_cam_mclk",
+			"sensor_gpio_standby",
+			"sensor_gpio_af_pwdm",
+			"none";
+		qcom,cam-power-seq-cfg-val = <0 0 0 0 0 1 1 0 24000000 1 1 0>;
 		qcom,cam-power-seq-delay = <5 5 5 5 5 5 5 5 5 5 5 5>;
 		qcom,csi-lane-assign = <0x4320>;
 		qcom,csi-lane-mask = <0x1f>;
