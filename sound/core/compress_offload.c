@@ -145,8 +145,7 @@ static int snd_compr_free(struct inode *inode, struct file *f)
 	case SNDRV_PCM_STATE_RUNNING:
 	case SNDRV_PCM_STATE_DRAINING:
 	case SNDRV_PCM_STATE_PAUSED:
-		data->stream.ops->trigger(&data->stream,
-					SNDRV_PCM_TRIGGER_STOP);
+		data->stream.ops->trigger(&data->stream, SNDRV_PCM_TRIGGER_STOP);
 		break;
 	default:
 		break;
@@ -504,9 +503,6 @@ static int snd_compress_check_input(struct snd_compr_params *params)
 		return -EINVAL;
 
 	if (params->codec.ch_in == 0 || params->codec.ch_out == 0)
-		return -EINVAL;
-
-	if (!(params->codec.sample_rate & SNDRV_PCM_RATE_8000_192000))
 		return -EINVAL;
 
 	return 0;
