@@ -1043,6 +1043,7 @@ config MFD_FLORIDA
 config MFD_WM8998
 	bool "Support Wolfson Microelectronics WM8998"
 	depends on MFD_ARIZONA
+	select SND_SOC_WM8998
 	help
 	  Support for Wolfson Microelectronics WM8998 low power audio SoC
 
