@@ -346,9 +346,10 @@ ERROR:
 	return rc;
 }
 
-int msm_camera_get_dt_power_setting_data(struct device_node *of_node,
+static int msm_camera_parse_dt_power_setting(struct device_node *of_node,
 	struct camera_vreg_t *cam_vreg, int num_vreg,
-	struct msm_camera_power_ctrl_t *power_info)
+	struct msm_sensor_power_setting **power_setting,
+	uint16_t *power_setting_size, bool is_power_up)
 {
 	int rc = 0, i, j;
 	int count = 0;
@@ -356,35 +357,32 @@ int msm_camera_get_dt_power_setting_data(struct device_node *of_node,
 	uint32_t *array = NULL;
 	struct msm_sensor_power_setting *ps;
 
-	struct msm_sensor_power_setting *power_setting;
-	uint16_t *power_setting_size, size = 0;
-	bool need_reverse = 0;
-
-	if (!power_info)
-		return -EINVAL;
-
-	power_setting = power_info->power_setting;
-	power_setting_size = &power_info->power_setting_size;
-
-	count = of_property_count_strings(of_node, "qcom,cam-power-seq-type");
-	*power_setting_size = count;
+	count = is_power_up ?
+		of_property_count_strings(of_node, "qcom,cam-power-seq-type") :
+		of_property_count_strings(of_node, "qcom,cam-power-down-seq-type");
 
 	CDBG("%s qcom,cam-power-seq-type count %d\n", __func__, count);
 
-	if (count <= 0)
+	if (count <= 0) {
+		*power_setting_size = 0;
 		return 0;
+	}
 
 	ps = kzalloc(sizeof(*ps) * count, GFP_KERNEL);
 	if (!ps) {
 		pr_err("%s failed %d\n", __func__, __LINE__);
 		return -ENOMEM;
 	}
-	power_setting = ps;
-	power_info->power_setting = ps;
+	*power_setting = ps;
+	*power_setting_size = count;
 
 	for (i = 0; i < count; i++) {
-		rc = of_property_read_string_index(of_node,
+		rc = is_power_up ?
+			of_property_read_string_index(of_node,
 			"qcom,cam-power-seq-type", i,
+			&seq_name) :
+			of_property_read_string_index(of_node,
+			"qcom,cam-power-down-seq-type", i,
 			&seq_name);
 		CDBG("%s seq_name[%d] = %s\n", __func__, i,
 			seq_name);
@@ -415,10 +413,13 @@ int msm_camera_get_dt_power_setting_data(struct device_node *of_node,
 		}
 	}
 
-
 	for (i = 0; i < count; i++) {
-		rc = of_property_read_string_index(of_node,
+		rc = is_power_up ?
+			of_property_read_string_index(of_node,
 			"qcom,cam-power-seq-val", i,
+			&seq_name) :
+			of_property_read_string_index(of_node,
+			"qcom,cam-power-down-seq-val", i,
 			&seq_name);
 		CDBG("%s seq_name[%d] = %s\n", __func__, i,
 			seq_name);
@@ -482,8 +483,10 @@ int msm_camera_get_dt_power_setting_data(struct device_node *of_node,
 		goto ERROR1;
 	}
 
-
-	rc = of_property_read_u32_array(of_node, "qcom,cam-power-seq-cfg-val",
+	rc = is_power_up ?
+		of_property_read_u32_array(of_node, "qcom,cam-power-seq-cfg-val",
+		array, count) :
+		of_property_read_u32_array(of_node, "qcom,cam-power-down-seq-cfg-val",
 		array, count);
 	if (rc < 0) {
 		pr_err("%s failed %d\n", __func__, __LINE__);
@@ -502,7 +505,10 @@ int msm_camera_get_dt_power_setting_data(struct device_node *of_node,
 			ps[i].config_val);
 	}
 
-	rc = of_property_read_u32_array(of_node, "qcom,cam-power-seq-delay",
+	rc = is_power_up ?
+		of_property_read_u32_array(of_node, "qcom,cam-power-seq-delay",
+		array, count) :
+		of_property_read_u32_array(of_node, "qcom,cam-power-down-seq-delay",
 		array, count);
 	if (rc < 0) {
 		pr_err("%s failed %d\n", __func__, __LINE__);
@@ -514,45 +520,74 @@ int msm_camera_get_dt_power_setting_data(struct device_node *of_node,
 			i, ps[i].delay);
 	}
 	kfree(array);
-
-	size = *power_setting_size;
-
-	if (NULL != ps && 0 != size)
-		need_reverse = 1;
-
-	power_info->power_down_setting =
-		kzalloc(sizeof(*ps) * size, GFP_KERNEL);
-
-	if (!power_info->power_down_setting) {
-		pr_err("%s failed %d\n", __func__, __LINE__);
-		rc = -ENOMEM;
-		goto ERROR1;
-	}
-
-	memcpy(power_info->power_down_setting,
-		ps, sizeof(*ps) * size);
-
-	power_info->power_down_setting_size = size;
-
-	if (need_reverse) {
-		int c, end = size - 1;
-		struct msm_sensor_power_setting power_down_setting_t;
-		for (c = 0; c < size/2; c++) {
-			power_down_setting_t =
-				power_info->power_down_setting[c];
-			power_info->power_down_setting[c] =
-				power_info->power_down_setting[end];
-			power_info->power_down_setting[end] =
-				power_down_setting_t;
-			end--;
-		}
-	}
 	return rc;
 ERROR2:
 	kfree(array);
 ERROR1:
 	kfree(ps);
-	power_setting_size = 0;
+	return rc;
+}
+
+int msm_camera_get_dt_power_setting_data(struct device_node *of_node,
+	struct camera_vreg_t *cam_vreg, int num_vreg,
+	struct msm_camera_power_ctrl_t *power_info)
+{
+	int rc = 0;
+	int c, end;
+	int power_setting_size, power_down_setting_size;
+	struct msm_sensor_power_setting tmp;
+	struct msm_sensor_power_setting *ps, *pds;
+
+	if (!power_info)
+		return -EINVAL;
+
+	rc = msm_camera_parse_dt_power_setting(of_node, cam_vreg, num_vreg,
+			&power_info->power_setting,
+			&power_info->power_setting_size, true);
+	if (rc < 0) {
+		pr_err("%s: get_power_setting failed: %d\n", __func__,
+				__LINE__);
+		return rc;
+	}
+	ps = power_info->power_setting;
+	power_setting_size = power_info->power_setting_size;
+	if (power_setting_size == 0) {
+		pr_err("%s:%d\n", __func__, __LINE__);
+		return 0;
+	}
+
+	rc = msm_camera_parse_dt_power_setting(of_node, cam_vreg, num_vreg,
+			&power_info->power_down_setting,
+			&power_info->power_down_setting_size, false);
+	if (rc < 0) {
+		pr_err("%s: get power_down_setting failed: %d\n", __func__,
+				__LINE__);
+		return rc;
+	}
+	pds = power_info->power_down_setting;
+	power_down_setting_size = power_info->power_down_setting_size;
+
+	if (power_down_setting_size == 0) {
+		pds = kzalloc(sizeof(*ps) * power_setting_size,
+				GFP_KERNEL);
+		if (!pds) {
+			pr_err("%s failed %d\n", __func__, __LINE__);
+			return -ENOMEM;
+		}
+
+		memcpy(pds, ps, sizeof(*ps) * power_setting_size);
+
+		power_down_setting_size = power_setting_size;
+		power_info->power_down_setting_size = power_down_setting_size;
+
+		end = power_down_setting_size - 1;
+		for (c = 0; c < power_down_setting_size/2; c++) {
+			tmp = pds[c];
+			pds[c] = pds[end];
+			pds[end] = tmp;
+			end--;
+		}
+	}
 	return rc;
 }
 
