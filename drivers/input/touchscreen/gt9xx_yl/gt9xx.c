@@ -781,7 +781,6 @@ static void goodix_ts_work_func(struct work_struct *work)
 					if (key_value & (0x01<<i))
 					GTP_INFO("%s KEY press.", key_name[i]);
 				#endif
-		}
         }
         touch_num = 0;
         pre_touch = 0;
