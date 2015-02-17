@@ -433,8 +433,7 @@ static int __scm_call_armv8_32(u32 w0, u32 w1, u32 w2, u32 w3, u32 w4, u32 w5,
 			: "r" (r0), "r" (r1), "r" (r2), "r" (r3), "r" (r4),
 			  "r" (r5)
 			: "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13",
-			"x14", "x15", "x16", "x17");
-
+			  "x14", "x15", "x16", "x17");
 	} while (r0 == SCM_INTERRUPTED);
 
 	if (ret1)
@@ -449,53 +448,17 @@ static int __scm_call_armv8_32(u32 w0, u32 w1, u32 w2, u32 w3, u32 w4, u32 w5,
 
 #else
 
-static int __scm_call_armv8_32(u32 w0, u32 w1, u32 w2, u32 w3, u32 w4, u32 w5,
-				u64 *ret1, u64 *ret2, u64 *ret3)
-{
-	register u32 r0 asm("r0") = w0;
-	register u32 r1 asm("r1") = w1;
-	register u32 r2 asm("r2") = w2;
-	register u32 r3 asm("r3") = w3;
-	register u32 r4 asm("r4") = w4;
-	register u32 r5 asm("r5") = w5;
-
-	do {
-		asm volatile(
-			__asmeq("%0", R0_STR)
-			__asmeq("%1", R1_STR)
-			__asmeq("%2", R2_STR)
-			__asmeq("%3", R3_STR)
-			__asmeq("%4", R0_STR)
-			__asmeq("%5", R1_STR)
-			__asmeq("%6", R2_STR)
-			__asmeq("%7", R3_STR)
-			__asmeq("%8", R4_STR)
-			__asmeq("%9", R5_STR)
-#ifdef REQUIRES_SEC
-			".arch_extension sec\n"
-#endif
-			"smc	#0\n"
-			: "=r" (r0), "=r" (r1), "=r" (r2), "=r" (r3)
-			: "r" (r0), "r" (r1), "r" (r2), "r" (r3), "r" (r4),
-			 "r" (r5));
-
-	} while (r0 == SCM_INTERRUPTED);
-
-	if (ret1)
-		*ret1 = r1;
-	if (ret2)
-		*ret2 = r2;
-	if (ret3)
-		*ret3 = r3;
-
-	return r0;
-}
-
 static int __scm_call_armv8_64(u64 x0, u64 x1, u64 x2, u64 x3, u64 x4, u64 x5,
 				u64 *ret1, u64 *ret2, u64 *ret3)
 {
 	return 0;
 }
+static int __scm_call_armv8_32(u32 w0, u32 w1, u32 w2, u32 w3, u32 w4, u32 w5,
+				u64 *ret1, u64 *ret2, u64 *ret3)
+{
+	return 0;
+}
+
 #endif
 
 struct scm_extra_arg {
@@ -513,7 +476,7 @@ static enum scm_interface_version {
 } scm_version = SCM_UNKNOWN;
 
 /* This will be set to specify SMC32 or SMC64 */
-static u32 scm_version_mask;
+static bool scm_version_mask;
 
 bool is_scm_armv8(void)
 {
@@ -548,8 +511,7 @@ bool is_scm_armv8(void)
 	} else
 		scm_version_mask = SMC64_MASK;
 
-	pr_debug("scm_call: scm version is %x, mask is %x\n", scm_version,
-		  scm_version_mask);
+	pr_debug("scm_call: scm version is %x\n", scm_version);
 
 	return (scm_version == SCM_ARMV8_32) ||
 			(scm_version == SCM_ARMV8_64);
@@ -670,7 +632,6 @@ int scm_call2(u32 fn_id, struct scm_desc *desc)
 		return scm_remap_error(ret);
 	return 0;
 }
-EXPORT_SYMBOL(scm_call2);
 
 /**
  * scm_call2_atomic() - Invoke a syscall in the secure world
@@ -1034,36 +995,3 @@ int scm_get_feat_version(u32 feat)
 	return 0;
 }
 EXPORT_SYMBOL(scm_get_feat_version);
-
-#define RESTORE_SEC_CFG    2
-int scm_restore_sec_cfg(u32 device_id, u32 spare, int *scm_ret)
-{
-	struct scm_desc desc = {0};
-	int ret;
-	struct restore_sec_cfg {
-		u32 device_id;
-		u32 spare;
-	} cfg;
-
-	cfg.device_id = device_id;
-	cfg.spare = spare;
-
-	if (IS_ERR_OR_NULL(scm_ret))
-		return -EINVAL;
-
-	if (!is_scm_armv8())
-		return scm_call(SCM_SVC_MP, RESTORE_SEC_CFG, &cfg, sizeof(cfg),
-				scm_ret, sizeof(*scm_ret));
-
-	desc.args[0] = device_id;
-	desc.args[1] = spare;
-	desc.arginfo = SCM_ARGS(2);
-
-	ret = scm_call2(SCM_SIP_FNID(SCM_SVC_MP, RESTORE_SEC_CFG), &desc);
-	if (ret)
-		return ret;
-
-	*scm_ret = desc.ret[0];
-	return 0;
-}
-EXPORT_SYMBOL(scm_restore_sec_cfg);
