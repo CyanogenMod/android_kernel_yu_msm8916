@@ -1,6 +1,7 @@
 #
 # Makefile for MMC/SD card drivers
 #
+CFLAGS_KERNEL := -fno-aggressive-loop-optimizations
 
 obj-$(CONFIG_MMC_BLOCK)		+= mmc_block.o
 mmc_block-objs			:= block.o queue.o
