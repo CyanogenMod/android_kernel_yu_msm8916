@@ -48,9 +48,7 @@
 #define IOMMU_SECURE_MAP	6
 #define IOMMU_SECURE_UNMAP      7
 #define IOMMU_SECURE_MAP2 0x0B
-#define IOMMU_SECURE_MAP2_FLAT 0x12
 #define IOMMU_SECURE_UNMAP2 0x0C
-#define IOMMU_SECURE_UNMAP2_FLAT 0x13
 #define IOMMU_TLBINVAL_FLAG 0x00000001
 
 /* commands for SCM_SVC_UTIL */
@@ -112,7 +110,7 @@ struct msm_cp_pool_size {
 struct msm_scm_fault_regs_dump {
 	uint32_t dump_size;
 	uint32_t dump_data[SEC_DUMP_SIZE];
-} __aligned(PAGE_SIZE);
+} __aligned(cache_line_size());
 
 void msm_iommu_sec_set_access_ops(struct iommu_access_ops *access_ops)
 {
@@ -340,7 +338,7 @@ static int msm_iommu_sec_ptbl_init(void)
 		unsigned int paddr;
 		unsigned int size;
 		unsigned int spare;
-	} pinit = {0};
+	} pinit;
 	int psize[2] = {0, 0};
 	unsigned int spare;
 	int ret, ptbl_ret = 0;
@@ -350,7 +348,6 @@ static int msm_iommu_sec_ptbl_init(void)
 	void *cpu_addr;
 	dma_addr_t paddr;
 	DEFINE_DMA_ATTRS(attrs);
-	struct scm_desc desc = {0};
 
 	for_each_matching_node(np, msm_smmu_list)
 		if (of_find_property(np, "qcom,iommu-secure-id", NULL) &&
@@ -367,19 +364,12 @@ static int msm_iommu_sec_ptbl_init(void)
 	if (version >= MAKE_VERSION(1, 1, 1)) {
 		struct msm_cp_pool_size psize;
 		int retval;
-		struct scm_desc desc = {0};
 
-		desc.args[0] = psize.size = MAXIMUM_VIRT_SIZE;
-		desc.args[1] = psize.spare = 0;
-		desc.arginfo = SCM_ARGS(2);
+		psize.size = MAXIMUM_VIRT_SIZE;
+		psize.spare = 0;
 
-		if (!is_scm_armv8())
-			ret = scm_call(SCM_SVC_MP, IOMMU_SET_CP_POOL_SIZE,
-					&psize, sizeof(psize), &retval,
-					sizeof(retval));
-		else
-			ret = scm_call2(SCM_SIP_FNID(SCM_SVC_MP,
-					IOMMU_SET_CP_POOL_SIZE), &desc);
+		ret = scm_call(SCM_SVC_MP, IOMMU_SET_CP_POOL_SIZE, &psize,
+				sizeof(psize), &retval, sizeof(retval));
 
 		if (ret) {
 			pr_err("scm call IOMMU_SET_CP_POOL_SIZE failed\n");
@@ -388,19 +378,8 @@ static int msm_iommu_sec_ptbl_init(void)
 
 	}
 
-	if (!is_scm_armv8()) {
-		ret = scm_call(SCM_SVC_MP, IOMMU_SECURE_PTBL_SIZE, &spare,
-				sizeof(spare), psize, sizeof(psize));
-	} else {
-		struct scm_desc desc = {0};
-
-		desc.args[0] = spare;
-		desc.arginfo = SCM_ARGS(1);
-		ret = scm_call2(SCM_SIP_FNID(SCM_SVC_MP,
-				IOMMU_SECURE_PTBL_SIZE), &desc);
-		psize[0] = desc.ret[0];
-		psize[1] = desc.ret[1];
-	}
+	ret = scm_call(SCM_SVC_MP, IOMMU_SECURE_PTBL_SIZE, &spare,
+			sizeof(spare), psize, sizeof(psize));
 	if (ret) {
 		pr_err("scm call IOMMU_SECURE_PTBL_SIZE failed\n");
 		goto fail;
@@ -421,19 +400,11 @@ static int msm_iommu_sec_ptbl_init(void)
 		goto fail;
 	}
 
-	desc.args[0] = pinit.paddr = (unsigned int)paddr;
-	desc.args[1] = pinit.size = psize[0];
-	desc.args[2] = pinit.spare;
-	desc.arginfo = SCM_ARGS(3, SCM_RW, SCM_VAL, SCM_VAL);
+	pinit.paddr = (unsigned int)paddr;
+	pinit.size = psize[0];
 
-	if (!is_scm_armv8()) {
-		ret = scm_call(SCM_SVC_MP, IOMMU_SECURE_PTBL_INIT, &pinit,
-				sizeof(pinit), &ptbl_ret, sizeof(ptbl_ret));
-	} else {
-		ret = scm_call2(SCM_SIP_FNID(SCM_SVC_MP,
-				IOMMU_SECURE_PTBL_INIT), &desc);
-		ptbl_ret = desc.ret[0];
-	}
+	ret = scm_call(SCM_SVC_MP, IOMMU_SECURE_PTBL_INIT, &pinit,
+			sizeof(pinit), &ptbl_ret, sizeof(ptbl_ret));
 	if (ret) {
 		pr_err("scm call IOMMU_SECURE_PTBL_INIT failed\n");
 		goto fail_mem;
@@ -471,40 +442,6 @@ int msm_iommu_sec_program_iommu(struct msm_iommu_drvdata *drvdata,
 	return ret;
 }
 
-static int msm_iommu_sec_map2(struct msm_scm_map2_req *map)
-{
-	struct scm_desc desc = {0};
-	u32 resp;
-	int ret;
-
-	desc.args[0] = map->plist.list;
-	desc.args[1] = map->plist.list_size;
-	desc.args[2] = map->plist.size;
-	desc.args[3] = map->info.id;
-	desc.args[4] = map->info.ctx_id;
-	desc.args[5] = map->info.va;
-	desc.args[6] = map->info.size;
-#ifdef CONFIG_MSM_IOMMU_TLBINVAL_ON_MAP
-	desc.args[7] = map->flags = IOMMU_TLBINVAL_FLAG;
-#else
-	desc.args[7] = map->flags = 0;
-#endif
-	desc.arginfo = SCM_ARGS(8, SCM_RW, SCM_VAL, SCM_VAL, SCM_VAL, SCM_VAL,
-				SCM_VAL, SCM_VAL, SCM_VAL);
-	if (!is_scm_armv8()) {
-		ret = scm_call(SCM_SVC_MP, IOMMU_SECURE_MAP2, map, sizeof(*map),
-				&resp, sizeof(resp));
-	} else {
-		ret = scm_call2(SCM_SIP_FNID(SCM_SVC_MP,
-				IOMMU_SECURE_MAP2_FLAT), &desc);
-		resp = desc.ret[0];
-	}
-	if (ret || resp)
-		return -EINVAL;
-
-	return 0;
-}
-
 static int msm_iommu_sec_ptbl_map(struct msm_iommu_drvdata *iommu_drvdata,
 			struct msm_iommu_ctx_drvdata *ctx_drvdata,
 			unsigned long va, phys_addr_t pa, size_t len)
@@ -521,7 +458,11 @@ static int msm_iommu_sec_ptbl_map(struct msm_iommu_drvdata *iommu_drvdata,
 	map.info.ctx_id = ctx_drvdata->num;
 	map.info.va = va;
 	map.info.size = len;
-
+#ifdef CONFIG_MSM_IOMMU_TLBINVAL_ON_MAP
+	map.flags = IOMMU_TLBINVAL_FLAG;
+#else
+	map.flags = 0;
+#endif
 	flush_va = &pa;
 	flush_pa = virt_to_phys(&pa);
 
@@ -530,7 +471,9 @@ static int msm_iommu_sec_ptbl_map(struct msm_iommu_drvdata *iommu_drvdata,
 	 */
 	dmac_clean_range(flush_va, flush_va + len);
 
-	ret = msm_iommu_sec_map2(&map);
+	if (scm_call(SCM_SVC_MP, IOMMU_SECURE_MAP2, &map, sizeof(map), &ret,
+								sizeof(ret)))
+		return -EINVAL;
 	if (ret)
 		return -EINVAL;
 
@@ -563,12 +506,17 @@ static int msm_iommu_sec_ptbl_map_range(struct msm_iommu_drvdata *iommu_drvdata,
 	unsigned int pa, cnt;
 	void *flush_va;
 	unsigned int offset = 0, chunk_offset = 0;
-	int ret;
+	int ret, scm_ret;
 
 	map.info.id = iommu_drvdata->sec_id;
 	map.info.ctx_id = ctx_drvdata->num;
 	map.info.va = va;
 	map.info.size = len;
+#ifdef CONFIG_MSM_IOMMU_TLBINVAL_ON_MAP
+	map.flags = IOMMU_TLBINVAL_FLAG;
+#else
+	map.flags = 0;
+#endif
 
 	if (sg->length == len) {
 		pa = get_phys_addr(sg);
@@ -615,7 +563,8 @@ static int msm_iommu_sec_ptbl_map_range(struct msm_iommu_drvdata *iommu_drvdata,
 	dmac_clean_range(flush_va,
 		flush_va + sizeof(unsigned long) * map.plist.list_size);
 
-	ret = msm_iommu_sec_map2(&map);
+	ret = scm_call(SCM_SVC_MP, IOMMU_SECURE_MAP2, &map, sizeof(map),
+			&scm_ret, sizeof(scm_ret));
 	kfree(pa_list);
 	return ret;
 }
@@ -626,22 +575,15 @@ static int msm_iommu_sec_ptbl_unmap(struct msm_iommu_drvdata *iommu_drvdata,
 {
 	struct msm_scm_unmap2_req unmap;
 	int ret, scm_ret;
-	struct scm_desc desc = {0};
 
-	desc.args[0] = unmap.info.id = iommu_drvdata->sec_id;
-	desc.args[1] = unmap.info.ctx_id = ctx_drvdata->num;
-	desc.args[2] = unmap.info.va = va;
-	desc.args[3] = unmap.info.size = len;
-	desc.args[4] = unmap.flags = IOMMU_TLBINVAL_FLAG;
-	desc.arginfo = SCM_ARGS(5);
+	unmap.info.id = iommu_drvdata->sec_id;
+	unmap.info.ctx_id = ctx_drvdata->num;
+	unmap.info.va = va;
+	unmap.info.size = len;
+	unmap.flags = IOMMU_TLBINVAL_FLAG;
 
-	if (!is_scm_armv8())
-		ret = scm_call(SCM_SVC_MP, IOMMU_SECURE_UNMAP2, &unmap,
-				sizeof(unmap), &scm_ret, sizeof(scm_ret));
-	else
-		ret = scm_call2(SCM_SIP_FNID(SCM_SVC_MP,
-				IOMMU_SECURE_UNMAP2_FLAT), &desc);
-
+	ret = scm_call(SCM_SVC_MP, IOMMU_SECURE_UNMAP2, &unmap, sizeof(unmap),
+			&scm_ret, sizeof(scm_ret));
 	return ret;
 }
 
@@ -749,12 +691,11 @@ static void msm_iommu_detach_dev(struct iommu_domain *domain,
 	struct msm_iommu_drvdata *iommu_drvdata;
 	struct msm_iommu_ctx_drvdata *ctx_drvdata;
 
-	if (!dev)
-		return;
-
 	msm_iommu_detached(dev->parent);
 
 	iommu_access_ops->iommu_lock_acquire(0);
+	if (!dev)
+		goto fail;
 
 	iommu_drvdata = dev_get_drvdata(dev->parent);
 	ctx_drvdata = dev_get_drvdata(dev);
@@ -866,7 +807,7 @@ static int msm_iommu_unmap_range(struct iommu_domain *domain, unsigned int va,
 {
 	struct msm_iommu_drvdata *iommu_drvdata;
 	struct msm_iommu_ctx_drvdata *ctx_drvdata;
-	int ret = -EINVAL;
+	int ret;
 
 	iommu_access_ops->iommu_lock_acquire(0);
 
@@ -880,7 +821,7 @@ static int msm_iommu_unmap_range(struct iommu_domain *domain, unsigned int va,
 
 fail:
 	iommu_access_ops->iommu_lock_release(0);
-	return ret ? ret : 0;
+	return 0;
 }
 
 static phys_addr_t msm_iommu_iova_to_phys(struct iommu_domain *domain,
