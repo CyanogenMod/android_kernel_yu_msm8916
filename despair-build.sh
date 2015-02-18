@@ -16,7 +16,7 @@ DEFCONFIG="cyanogenmod_tomato_defconfig"
 
 # Kernel Details
 BASE_AK_VER="Despair-Yu"
-VER=".R3"
+VER=".R4"
 AK_VER="$BASE_AK_VER$VER"
 
 # Vars
