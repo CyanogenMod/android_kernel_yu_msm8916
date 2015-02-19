@@ -1,0 +1,5 @@
+ui_print("Installing Despair Kernel");
+ui_print("Installing kernel...");
+package_extract_file("boot.img", "/dev/block/platform/7824900.sdhci/by-name/boot");
+unmount("/system");
+ui_print("Done!");

@@ -45,6 +45,7 @@ struct wb_writeback_work {
 	unsigned int for_kupdate:1;
 	unsigned int range_cyclic:1;
 	unsigned int for_background:1;
+	unsigned int for_sync:1;	/* sync(2) WB_SYNC_ALL writeback */
 	enum wb_reason reason;		/* why was writeback initiated? */
 
 	struct list_head list;		/* pending work list */
@@ -456,9 +457,11 @@ __writeback_single_inode(struct inode *inode, struct writeback_control *wbc)
 	/*
 	 * Make sure to wait on the data before writing out the metadata.
 	 * This is important for filesystems that modify metadata on data
-	 * I/O completion.
+	 * I/O completion. We don't do it for sync(2) writeback because it has a
+	 * separate, external IO completion path and ->sync_fs for guaranteeing
+	 * inode metadata is written back correctly.
 	 */
-	if (wbc->sync_mode == WB_SYNC_ALL) {
+	if (wbc->sync_mode == WB_SYNC_ALL && !wbc->for_sync) {
 		int err = filemap_fdatawait(mapping);
 		if (ret == 0)
 			ret = err;
@@ -594,6 +597,7 @@ static long writeback_sb_inodes(struct super_block *sb,
 		.tagged_writepages	= work->tagged_writepages,
 		.for_kupdate		= work->for_kupdate,
 		.for_background		= work->for_background,
+		.for_sync		= work->for_sync,
 		.range_cyclic		= work->range_cyclic,
 		.range_start		= 0,
 		.range_end		= LLONG_MAX,
@@ -759,10 +763,6 @@ static bool over_bground_thresh(struct backing_dev_info *bdi)
 	unsigned long background_thresh, dirty_thresh;
 
 	global_dirty_limits(&background_thresh, &dirty_thresh);
-
-	if (global_page_state(NR_FILE_DIRTY) +
-	    global_page_state(NR_UNSTABLE_NFS) > background_thresh)
-		return true;
 
 	if (bdi_stat(bdi, BDI_RECLAIMABLE) >
 				bdi_dirty_limit(bdi, background_thresh))
@@ -1067,10 +1067,8 @@ void wakeup_flusher_threads(long nr_pages, enum wb_reason reason)
 {
 	struct backing_dev_info *bdi;
 
-	if (!nr_pages) {
-		nr_pages = global_page_state(NR_FILE_DIRTY) +
-				global_page_state(NR_UNSTABLE_NFS);
-	}
+	if (!nr_pages)
+		nr_pages = get_nr_dirty_pages();
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(bdi, &bdi_list, bdi_list) {
@@ -1191,6 +1189,8 @@ void __mark_inode_dirty(struct inode *inode, int flags)
 			bool wakeup_bdi = false;
 			bdi = inode_to_bdi(inode);
 
+			spin_unlock(&inode->i_lock);
+			spin_lock(&bdi->wb.list_lock);
 			if (bdi_cap_writeback_dirty(bdi)) {
 				WARN(!test_bit(BDI_registered, &bdi->state),
 				     "bdi-%s not registered\n", bdi->name);
@@ -1205,8 +1205,6 @@ void __mark_inode_dirty(struct inode *inode, int flags)
 					wakeup_bdi = true;
 			}
 
-			spin_unlock(&inode->i_lock);
-			spin_lock(&bdi->wb.list_lock);
 			inode->dirtied_when = jiffies;
 			list_move(&inode->i_wb_list, &bdi->wb.b_dirty);
 			spin_unlock(&bdi->wb.list_lock);
@@ -1378,6 +1376,7 @@ void sync_inodes_sb(struct super_block *sb)
 		.range_cyclic	= 0,
 		.done		= &done,
 		.reason		= WB_REASON_SYNC,
+		.for_sync	= 1,
 	};
 
 	/* Nothing to do? */

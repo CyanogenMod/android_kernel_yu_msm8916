@@ -43,8 +43,14 @@ static int of_gpiochip_find_and_xlate(struct gpio_chip *gc, void *data)
 		return false;
 
 	ret = gc->of_xlate(gc, &gg_data->gpiospec, gg_data->flags);
-	if (ret < 0)
-		return false;
+	if (ret < 0) {
+		/* We've found the gpio chip, but the translation failed.
+		 * Return true to stop looking and return the translation
+		 * error via out_gpio
+		 */
+		gg_data->out_gpio = (int)ERR_PTR(ret);
+		return true;
+	 }
 
 	gg_data->out_gpio = ret + gc->base;
 	return true;
@@ -84,9 +90,7 @@ int of_get_named_gpio_flags(struct device_node *np, const char *propname,
 	gpiochip_find(&gg_data, of_gpiochip_find_and_xlate);
 
 	of_node_put(gg_data.gpiospec.np);
-	if (IS_ERR_VALUE(gg_data.out_gpio))
-		pr_debug("%s exited with status %d\n", __func__,
-			 gg_data.out_gpio);
+	pr_debug("%s exited with status %d\n", __func__, gg_data.out_gpio);
 	return gg_data.out_gpio;
 }
 EXPORT_SYMBOL(of_get_named_gpio_flags);

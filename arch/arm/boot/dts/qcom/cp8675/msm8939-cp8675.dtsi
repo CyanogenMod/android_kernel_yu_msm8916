@@ -80,11 +80,9 @@
 			yl,recharge-thresh-mv = <100>;
 			yl,vbus-ovp-mv = <6500>;
 			yl,recharge-capa = <99>;
-			yl,batt-temp-cold-negative = <0>; /* if we set cold temp is negative num, set it to 1 */
-			yl,batt-temp-hot = <520>; /* 52 celsius */
-			yl,batt-temp-too-hot = <570>; /* 57 celsius*/
-			yl,batt-temp-cold = <100>;  /* 10 celsius */
-			yl,batt-temp-too-cold = <0>;  /*3 celsius*/
+			yl,batt-temp-cold-negative = <1>; /* if we set cold temp is negative num, set it to 1 */
+			yl,batt-temp-hot = <490>; /* 49 celsius */
+			yl,batt-temp-cold = <30>;  /* 0 celsius */
 			yl,batt-psy-name = "battery";
 			yl,battery-psy-name = "lc709203_battery";
 		};
@@ -132,7 +130,7 @@
 			alsp_vreg-supply = <&pm8916_l6>;
 			pa12200001,gpio_int = <&msm_gpio 113 0x00>;
 			pa12200001,irq_flags = <0x2>;
-			pa12200001,cfgs = <40 25 255 0 5 1 0 2 0 1 3 1 1 0 1 50 100>;
+			pa12200001,cfgs = <40 25 255 0 5 1 0 2 0 1 3 1 1 0 1 30 100>;
 		};
 		yl_lc709203@0B {
 			compatible = "yl,yl_lc709203";
