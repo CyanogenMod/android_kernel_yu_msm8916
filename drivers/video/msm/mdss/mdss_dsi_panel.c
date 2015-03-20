@@ -466,6 +466,9 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 	}
 }
 
+#ifdef CONFIG_YULONG_COLOR
+extern void color_enhancement_impl_apply(void);
+#endif
 static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 {
 	struct mipi_panel_info *mipi;
@@ -484,6 +487,10 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 
 	if (ctrl->on_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
+
+#ifdef CONFIG_YULONG_COLOR
+	color_enhancement_impl_apply();
+#endif
 
 	pr_debug("%s:-\n", __func__);
 	return 0;
