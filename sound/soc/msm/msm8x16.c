@@ -76,7 +76,9 @@ static int msm_ter_mi2s_tx_ch = 1;
 static int msm_pri_mi2s_rx_ch = 1;
 
 static int msm_proxy_rx_ch = 2;
+#ifndef CONFIG_MACH_CP8675
 static int msm8909_auxpcm_rate = 8000;
+#endif
 
 static atomic_t quat_mi2s_clk_ref;
 static atomic_t auxpcm_mi2s_clk_ref;
@@ -299,6 +301,7 @@ static const char *const loopback_mclk_text[] = {"DISABLE", "ENABLE"};
 static const char *const quatmi2s_clk_text[] = {"DISABLE", "ENABLE"};
 #endif
 
+#ifndef CONFIG_MACH_CP8675
 static int msm_auxpcm_be_params_fixup(struct snd_soc_pcm_runtime *rtd,
 					struct snd_pcm_hw_params *params)
 {
@@ -313,6 +316,7 @@ static int msm_auxpcm_be_params_fixup(struct snd_soc_pcm_runtime *rtd,
 
 	return 0;
 }
+#endif
 
 static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 {
@@ -1165,6 +1169,7 @@ static int conf_int_codec_mux_sec(struct msm8916_asoc_mach_data *pdata)
 	return 0;
 }
 
+#ifndef CONFIG_MACH_CP8675
 static int msm_prim_auxpcm_startup(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
@@ -1224,6 +1229,7 @@ static void msm_prim_auxpcm_shutdown(struct snd_pcm_substream *substream)
 				__func__);
 	}
 }
+#endif
 
 static int msm_sec_mi2s_snd_startup(struct snd_pcm_substream *substream)
 {
@@ -1689,10 +1695,12 @@ static struct snd_soc_ops msm8x16_mi2s_be_ops = {
 	.shutdown = msm_mi2s_snd_shutdown,
 };
 
+#ifndef CONFIG_MACH_CP8675
 static struct snd_soc_ops msm_pri_auxpcm_be_ops = {
 	.startup = msm_prim_auxpcm_startup,
 	.shutdown = msm_prim_auxpcm_shutdown,
 };
+#endif
 
 #ifdef CONFIG_MACH_T86519A1
 static int wm8998_snd_startup_clk(void)
@@ -2385,6 +2393,7 @@ static struct snd_soc_dai_link msm8x16_dai[] = {
 		.ignore_suspend = 1,
 	},
 	/* Primary AUX PCM Backend DAI Links */
+#ifndef CONFIG_MACH_CP8675
 	{
 		.name = LPASS_BE_AUXPCM_RX,
 		.stream_name = "AUX PCM Playback",
@@ -2412,6 +2421,7 @@ static struct snd_soc_dai_link msm8x16_dai[] = {
 		.ops = &msm_pri_auxpcm_be_ops,
 		.ignore_suspend = 1,
 	},
+#endif
 	{
 		.name = LPASS_BE_INT_BT_SCO_RX,
 		.stream_name = "Internal BT-SCO Playback",
