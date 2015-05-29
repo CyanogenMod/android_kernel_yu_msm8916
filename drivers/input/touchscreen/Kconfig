@@ -1010,6 +1010,26 @@ config SECURE_TOUCH
 
 	  If unsure, say N.
 
+config TOUCHSCREEN_GSL1688E
+	tristate "SLIEAD GSL1688E I2C Touchscreen support (ARM)"
+	depends on I2C
+	help
+	  Say Y here if you have an EDT "Polytouch" touchscreen based
+	  on the SLIEAD GSL1688E family of controllers connected to
+	  your system.
+
+	  If unsure, say N.
+
+config TOUCHSCREEN_GSL1688E_ARM64
+	tristate "SLIEAD GSL1688E I2C Touchscreen support (ARM64)"
+	depends on I2C
+	help
+	  Say Y here if you have an EDT "Polytouch" touchscreen based
+	  on the SLIEAD GSL1688E family of controllers connected to
+	  your system.
+
+	  If unsure, say N.
+
 config TOUCHSCREEN_GT9XX
 	bool "Goodix touchpanel GT9xx series"
 	depends on I2C
@@ -1019,6 +1039,32 @@ config TOUCHSCREEN_GT9XX
 	  report 5 touches at a time.
 
           If unsure, say N.
+
+config TOUCHSCREEN_WT_GT9XX
+	bool "Goodix touchpanel (Wingtech variant)"
+	depends on I2C
+	help
+	  Say Y here if you have a Goodix GT9xx touchscreen (Wingtech variant).
+	  Gt9xx controllers are multi touch controllers which can
+	  report 5 touches at a time.
+
+	  If unsure, say N.
+
+config TOUCHSCREEN_WT_GT9XX_UPDATE
+	bool "Goodix touchpanel (Wingtech variant) firmware update"
+	depends on TOUCHSCREEN_WT_GT9XX
+	help
+	  Say Y here if you want GT9xx (Wingtech) firmware update.
+
+	  If unsure, say N.
+
+config TOUCHSCREEN_WT_GT9XX_DEBUG
+	bool "Goodix touchpanel (Wingtech variant) debug"
+	depends on TOUCHSCREEN_WT_GT9XX
+	help
+	  Say Y here if you want GT9xx (Wingtech) extra debug.
+
+	  If unsure, say N.
 
 config TOUCHSCREEN_YL_GT9XX
 	bool "Goodix touchpanel (YL variant)"
